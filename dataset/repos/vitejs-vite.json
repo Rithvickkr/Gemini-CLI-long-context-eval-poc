@@ -1,0 +1,21 @@
+{
+  "repo_id": "vitejs-vite",
+  "url": "https://github.com/vitejs/vite",
+  "commit": "f516f2ee570f9abe27c8b01ee05b6f0dc0c7dc5e",
+  "languages": ["TypeScript", "JavaScript"],
+  "size_files": 3800,
+  "size_lines": 180000,
+  "license": "MIT",
+  "description": "Next generation frontend tooling — fast dev server with HMR, optimized builds via Rollup",
+  "stars": 70000,
+  "sparse_checkout_paths": [
+    "packages/vite/src/node/server/",
+    "packages/vite/src/node/plugins/",
+    "packages/vite/src/node/"
+  ],
+  "task_ids": [
+    "vite-hmr-memory-leak-001",
+    "vite-config-reload-race-002"
+  ],
+  "verified_at": "2026-03-28"
+}

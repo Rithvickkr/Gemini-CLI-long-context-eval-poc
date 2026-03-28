@@ -1,0 +1,19 @@
+{
+  "repo_id": "socketio-socket.io",
+  "url": "https://github.com/socketio/socket.io",
+  "commit": "e4d016bd5b4dba8646a53616fc8af1a257608c15",
+  "languages": ["TypeScript"],
+  "size_files": 180,
+  "size_lines": 22000,
+  "license": "MIT",
+  "description": "Bidirectional and low-latency communication for every platform — namespace/room architecture with pluggable adapter support",
+  "stars": 61000,
+  "sparse_checkout_paths": [
+    "packages/socket.io/lib/"
+  ],
+  "task_ids": [
+    "socketio-namespace-teardown-001",
+    "socketio-room-join-leak-002"
+  ],
+  "verified_at": "2026-03-28"
+}

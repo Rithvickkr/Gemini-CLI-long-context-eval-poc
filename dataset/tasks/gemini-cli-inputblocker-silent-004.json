@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-inputblocker-silent-004",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/agents/browser/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "The Gemini CLI browser automation agent has an input blocker overlay that prevents user interaction during automated tool calls. However, when the overlay fails to inject, suspend, resume, or remove, the errors are silently swallowed with empty catch blocks. This makes debugging impossible when the overlay gets stuck, leaks between sessions, or fails to re-inject after page navigation. Users report that the browser overlay sometimes gets stuck and they can't interact with the page, with no error messages in the output. Investigate the error handling in the input blocker system and add proper error reporting.",
+    "hint_levels": {
+      "symptom_only": "Browser input blocker overlay sometimes gets stuck or fails silently. No error messages appear even when the overlay is in an inconsistent state. Debugging is impossible.",
+      "file_hint": "The bugs are spread across packages/core/src/agents/browser/inputBlocker.ts, browserManager.ts, mcpToolWrapper.ts, and browserAgentInvocation.ts. Each file has empty catch blocks or fire-and-forget patterns that swallow errors.",
+      "function_hint": "suspendInputBlocker() at line 251 and resumeInputBlocker() at line 270 in inputBlocker.ts have completely empty catch blocks. browserManager.ts line 826 uses void injectInputBlocker() (fire-and-forget). mcpToolWrapper.ts line 184 uses .catch(() => {}) to swallow resume errors."
+    },
+    "reasoning_forcing_score": 9,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 10,
+      "context_depth": "cross_file",
+      "domain_knowledge": "architecture_level",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/agents/browser/inputBlocker.ts",
+        "packages/core/src/agents/browser/browserManager.ts",
+        "packages/core/src/agents/browser/mcpToolWrapper.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/agents/browser/inputBlocker.ts",
+        "packages/core/src/agents/browser/browserManager.ts",
+        "packages/core/src/agents/browser/mcpToolWrapper.ts",
+        "packages/core/src/agents/browser/browserAgentInvocation.ts"
+      ],
+      "key_assertions": [
+        "debugLogger",
+        "warn",
+        "error",
+        "log",
+        "catch"
+      ],
+      "negative_assertions": [
+        "throw.*inputBlocker"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: browser overlay gets stuck with no error messages",
+      "Open inputBlocker.ts and find the four exported functions: inject, remove, suspend, resume",
+      "Find suspendInputBlocker() at line 251 — empty catch block with only a comment",
+      "Find resumeInputBlocker() at line 270 — empty catch block with only a comment",
+      "Note that injectInputBlocker() at line 203 and removeInputBlocker() at line 230 at least log to debugLogger.warn(), but still swallow errors",
+      "Open browserManager.ts and find registerInputBlockerHandler() — line 826 uses void injectInputBlocker() (fire-and-forget, no error handling)",
+      "Find callTool() — lines 303-305 have an empty catch block after navigation that swallows blocker injection failures",
+      "Open mcpToolWrapper.ts — line 184 uses .catch(() => {}) to explicitly swallow resumeInputBlocker errors",
+      "Open browserAgentInvocation.ts — line 370 awaits removeInputBlocker but the function itself swallows its own errors",
+      "Apply fix: replace empty catch blocks with debugLogger.error() calls, await the fire-and-forget promise, track blocker state for diagnostics"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-14",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": null,
+    "cleanup": "delete_workspace"
+  }
+}

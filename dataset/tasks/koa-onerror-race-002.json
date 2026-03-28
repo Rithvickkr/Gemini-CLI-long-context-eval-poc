@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "koa-onerror-race-002",
+  "repository": {
+    "url": "https://github.com/koajs/koa",
+    "commit": "e0ba8ef39d27fe5dae5492f9fe753d155124f994",
+    "languages": ["JavaScript"],
+    "size_files": 12,
+    "size_lines": 3500,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "lib/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "race_condition",
+    "prompt": "Koa's error handler can throw an uncaught 'write after end' exception in production when a client disconnects during error handling. The application.js request handler registers ctx.onerror both as a catch handler on the middleware promise chain AND as an on-finished listener on the response. When both fire close together, the headerSent check at the top of ctx.onerror in context.js passes but the response becomes unwritable before res.end() is reached, causing Node's HTTP stack to throw an error that is not caught anywhere. Investigate the dual registration of the error handler and fix the response write guard.",
+    "hint_levels": {
+      "symptom_only": "Under load or when clients disconnect abruptly, the server occasionally crashes with an uncaught write-after-end error during error handling. The error does not appear in normal operation and is difficult to reproduce reliably.",
+      "file_hint": "The bug spans lib/application.js and lib/context.js. In application.js handleRequest registers ctx.onerror twice — once as .catch(onerror) and once via onFinished(res, onerror). In context.js the onerror function checks this.writable once at line 120 but then calls res.end(msg) at line 165 without re-checking, creating a window where the response can become unwritable between the check and the write.",
+      "function_hint": "In lib/application.js at lines 198-205, handleRequest calls both onFinished(res, onerror) and .catch(onerror). In lib/context.js onerror at line 120, !this.writable causes an early return — but the writable getter in lib/response.js at lines 639-651 reads writableEnded which can change asynchronously. Add a second guard immediately before res.end(msg) at line 165 checking res.writableEnded."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "lib/context.js",
+        "lib/application.js"
+      ],
+      "files_must_read": [
+        "lib/application.js",
+        "lib/context.js",
+        "lib/response.js",
+        "lib/request.js"
+      ],
+      "key_assertions": [
+        "writableEnded|writable.*return|finished.*return"
+      ],
+      "negative_assertions": [
+        "onerror.*disable|remove.*onerror"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: uncaught write-after-end exception during error handling under client disconnect",
+      "Open lib/application.js and find handleRequest at lines 198-205",
+      "Identify dual registration: .catch(onerror) AND onFinished(res, onerror) both call ctx.onerror",
+      "Open lib/context.js and find onerror function",
+      "Find the single this.writable check at line 120 — it guards the whole function but not the terminal res.end()",
+      "Open lib/response.js and find the writable getter at lines 639-651 — reads writableEnded which changes asynchronously",
+      "Find status setter at lines 83-92 — silently returns if headerSent, meaning setters between line 120 and 165 can silently fail",
+      "Realize: writable can become false between line 120 check and line 165 res.end() call when both error paths fire concurrently",
+      "Apply fix: add res.writableEnded guard immediately before res.end(msg) in context.js onerror"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

@@ -1,0 +1,306 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/google-gemini/gemini-cli/dataset/schema.json",
+  "title": "Long-Context Eval Task Schema",
+  "description": "Schema for long-context coding evaluation tasks that test multi-file reasoning across large codebases.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_id",
+    "repository",
+    "task",
+    "eval_config"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for forward compatibility"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+-[0-9]{3}$",
+      "description": "Unique task identifier: {repo}-{slug}-{number}"
+    },
+    "repository": {
+      "type": "object",
+      "required": ["url", "commit", "languages", "size_files", "size_lines", "license"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "GitHub repository URL"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$",
+          "description": "Full SHA-1 commit hash (pre-fix state)"
+        },
+        "languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Programming languages in the repo"
+        },
+        "size_files": {
+          "type": "integer",
+          "minimum": 10,
+          "description": "Total file count"
+        },
+        "size_lines": {
+          "type": "integer",
+          "minimum": 1000,
+          "description": "Total line count"
+        },
+        "license": {
+          "type": "string",
+          "enum": ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC"],
+          "description": "SPDX license identifier (permissive only)"
+        },
+        "sparse_checkout_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths for sparse checkout (reduces CI clone size)"
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "required": [
+        "type",
+        "category",
+        "prompt",
+        "hint_levels",
+        "reasoning_forcing_score",
+        "context_pressure",
+        "difficulty",
+        "expected_changes",
+        "reasoning_chain",
+        "contamination_info"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["bug_fix", "feature_integration", "refactoring", "performance_fix"],
+          "description": "High-level task type"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "unbounded_growth",
+            "race_condition",
+            "silent_failure",
+            "error_recovery",
+            "cross_component_bug",
+            "refactoring",
+            "feature_addition",
+            "resource_leak",
+            "cross_component_feature_integration"
+          ],
+          "description": "One of 9 task categories"
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 50,
+          "description": "Default task prompt (symptom-based, no answer leakage)"
+        },
+        "hint_levels": {
+          "type": "object",
+          "required": ["symptom_only", "file_hint", "function_hint"],
+          "properties": {
+            "symptom_only": {
+              "type": "string",
+              "description": "Describes observable symptom only"
+            },
+            "file_hint": {
+              "type": "string",
+              "description": "Names the file(s) containing the bug"
+            },
+            "function_hint": {
+              "type": "string",
+              "description": "Names the specific function/variable"
+            }
+          },
+          "description": "3 progressive hint levels for difficulty calibration"
+        },
+        "reasoning_forcing_score": {
+          "type": "number",
+          "minimum": 3,
+          "description": "RFS = (files_must_read - files_in_diff) * cross_references + backtracking. Minimum 3 ensures long-context is required."
+        },
+        "context_pressure": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "How much context management stress the task produces"
+        },
+        "difficulty": {
+          "type": "object",
+          "required": [
+            "files_involved",
+            "languages_required",
+            "reasoning_steps",
+            "context_depth",
+            "domain_knowledge",
+            "overall"
+          ],
+          "properties": {
+            "files_involved": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            },
+            "languages_required": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reasoning_steps": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 25
+            },
+            "context_depth": {
+              "type": "string",
+              "enum": ["single_function", "cross_function", "cross_file", "cross_package"]
+            },
+            "domain_knowledge": {
+              "type": "string",
+              "enum": ["generic_coding", "framework_specific", "architecture_level"]
+            },
+            "overall": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Weighted average: files_involved and reasoning_steps at 2x"
+            }
+          }
+        },
+        "expected_changes": {
+          "type": "object",
+          "required": ["files_modified", "files_must_read", "key_assertions"],
+          "properties": {
+            "files_modified": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Files the fix should modify"
+            },
+            "files_must_read": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Files the agent must read to understand the bug (superset of files_modified)"
+            },
+            "key_assertions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Patterns that must appear in the agent's fix"
+            },
+            "negative_assertions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Patterns that must NOT appear (guard against over-editing)"
+            },
+            "assertion_type": {
+              "type": "string",
+              "enum": ["diff_contains", "test_oracle", "both"],
+              "default": "diff_contains"
+            }
+          }
+        },
+        "reasoning_chain": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "description": "Step-by-step reasoning the agent must perform"
+        },
+        "contamination_info": {
+          "type": "object",
+          "required": ["issue_created", "training_cutoff_risk"],
+          "properties": {
+            "issue_created": {
+              "type": "string",
+              "format": "date",
+              "description": "When the issue was filed (ISO 8601)"
+            },
+            "fix_merged": {
+              "type": ["string", "null"],
+              "description": "When the fix was merged, or null if unmerged"
+            },
+            "training_cutoff_risk": {
+              "type": "string",
+              "enum": ["low", "medium", "high"],
+              "description": "Risk of task being in LLM training data"
+            },
+            "contamination_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Score from detect-contamination.ts (0 = clean, 1 = fully contaminated)"
+            },
+            "obfuscation_applied": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      }
+    },
+    "eval_config": {
+      "type": "object",
+      "required": ["timeout_ms", "policy", "setup"],
+      "properties": {
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 900000,
+          "description": "Per-eval timeout (default vitest is 300000)"
+        },
+        "policy": {
+          "type": "string",
+          "enum": ["ALWAYS_PASSES", "USUALLY_PASSES"],
+          "description": "Eval policy (all new evals start as USUALLY_PASSES)"
+        },
+        "setup": {
+          "type": "string",
+          "enum": ["shallow_clone", "sparse_clone", "tarball"],
+          "description": "How to set up the repo in CI"
+        },
+        "test_oracle": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["test_command", "fail_to_pass"],
+              "properties": {
+                "test_command": {
+                  "type": "string",
+                  "description": "Command to run tests (e.g., 'npm test', 'pytest')"
+                },
+                "fail_to_pass": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "minItems": 1,
+                  "description": "Test IDs that FAIL before fix and must PASS after (SWE-bench compatible)"
+                },
+                "pass_to_pass": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Test IDs that must continue to PASS after fix (regression guard)"
+                }
+              }
+            }
+          ],
+          "description": "SWE-bench compatible test oracle with fail_to_pass/pass_to_pass, or null"
+        },
+        "cleanup": {
+          "type": "string",
+          "enum": ["delete_workspace", "keep_on_failure"],
+          "default": "delete_workspace"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

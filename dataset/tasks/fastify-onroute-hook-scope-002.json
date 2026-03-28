@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "fastify-onroute-hook-scope-002",
+  "repository": {
+    "url": "https://github.com/fastify/fastify",
+    "commit": "d457aeda8611777389c7e4713a288eb7ddb9a389",
+    "languages": ["JavaScript"],
+    "size_files": 424,
+    "size_lines": 50000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "lib/",
+      "fastify.js"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "cross_component_bug",
+    "prompt": "When an onRoute hook is registered on the root Fastify instance after a plugin has already been registered, the hook is not called for routes added inside that plugin. Routes registered in encapsulated plugins silently skip globally-registered onRoute hooks that were added after the plugin's registration. This causes plugin-based route monitoring and instrumentation to silently miss routes. Investigate the hook inheritance mechanism across plugin encapsulation and fix the ordering issue.",
+    "hint_levels": {
+      "symptom_only": "Global lifecycle callbacks added to the server after a plugin is registered are silently skipped for routes inside that plugin. Route monitoring and instrumentation produces incomplete data — some routes are never reported.",
+      "file_hint": "The bug spans lib/hooks.js, lib/plugin-override.js, and lib/route.js. When a plugin is encapsulated, buildHooks() copies the current hooks at that point in time. onRoute hooks registered on the parent after encapsulation are not copied into the plugin scope.",
+      "function_hint": "In lib/plugin-override.js line 38-47, buildHooks(instance[kHooks]) is called at plugin registration time. lib/hooks.js line 73-91 copies only the hooks that exist at that moment. Any onRoute hook added to the parent after this point is invisible to the plugin's route registration at lib/route.js line 295-301."
+    },
+    "reasoning_forcing_score": 9,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "lib/hooks.js"
+      ],
+      "files_must_read": [
+        "lib/hooks.js",
+        "lib/plugin-override.js",
+        "lib/route.js",
+        "fastify.js",
+        "lib/symbols.js"
+      ],
+      "key_assertions": [
+        "onRoute|hook.*inherit|parent.*hook"
+      ],
+      "negative_assertions": [
+        "onRoute.*disable|skip.*onRoute"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: onRoute hooks miss routes in encapsulated plugins",
+      "Open lib/plugin-override.js and find the encapsulation logic at line 38-47",
+      "Find buildHooks() call — hooks are copied at plugin creation time",
+      "Open lib/hooks.js and trace buildHooks() at line 73-91 — copies current hooks snapshot",
+      "Open lib/route.js and find route registration at line 295-301 — fires this[kHooks].onRoute",
+      "Realize: hooks added to parent AFTER plugin registration are not in the plugin's snapshot",
+      "Open fastify.js to understand the plugin lifecycle and avvio integration",
+      "Open lib/symbols.js to confirm kHooks symbol usage across files",
+      "Apply fix: use a reference to parent hooks for onRoute instead of a copied snapshot, or rebuild the hook chain at route-registration time"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

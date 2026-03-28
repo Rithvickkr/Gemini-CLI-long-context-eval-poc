@@ -1,0 +1,19 @@
+{
+  "repo_id": "nestjs-nest",
+  "url": "https://github.com/nestjs/nest",
+  "commit": "0fddd2efbed8ccd20ea77f963bcde2712db1920a",
+  "languages": ["TypeScript"],
+  "size_files": 520,
+  "size_lines": 65000,
+  "license": "MIT",
+  "description": "Progressive Node.js framework with modular DI container, decorator-based providers, and lifecycle hooks",
+  "stars": 70000,
+  "sparse_checkout_paths": [
+    "packages/core/"
+  ],
+  "task_ids": [
+    "nestjs-transient-scope-isolation-001",
+    "nestjs-dep-tree-static-cache-002"
+  ],
+  "verified_at": "2026-03-28"
+}

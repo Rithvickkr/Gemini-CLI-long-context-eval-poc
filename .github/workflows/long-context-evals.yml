@@ -1,0 +1,159 @@
+name: Long-Context Eval Suite
+
+on:
+  # Run nightly at 2am UTC (offset from main evals to avoid resource contention)
+  schedule:
+    - cron: '0 2 * * *'
+  # Allow manual trigger with model/hint-level selection
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Gemini model to evaluate'
+        required: false
+        default: 'gemini-2.5-flash'
+        type: choice
+        options:
+          - gemini-2.5-pro
+          - gemini-2.5-flash
+          - gemini-2.0-flash
+      hint_level:
+        description: 'Hint level (symptom_only=hardest)'
+        required: false
+        default: 'symptom_only'
+        type: choice
+        options:
+          - symptom_only
+          - file_hint
+          - function_hint
+      min_rfs:
+        description: 'Minimum Reasoning Forcing Score'
+        required: false
+        default: '3'
+
+env:
+  # Cache bare clones across runs (significant speedup for nightly)
+  REPO_CACHE_DIR: /tmp/gemini-eval-repos
+  RESULTS_DIR: evals/logs/results
+
+jobs:
+  validate-dataset:
+    name: Validate task dataset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate all tasks + repos
+        run: npm run validate
+
+      - name: Check contamination scores
+        run: npm run contamination
+
+      - name: Print dataset statistics
+        run: npx tsx evals/long-context/task-loader.ts
+
+  eval-matrix:
+    name: Eval (${{ matrix.model }}, ${{ matrix.hint_level }})
+    runs-on: ubuntu-latest
+    needs: validate-dataset
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Nightly: all 3 models × symptom_only (hardest)
+        # Manual: single model from input
+        model:
+          - ${{ github.event.inputs.model || 'gemini-2.5-flash' }}
+        hint_level:
+          - ${{ github.event.inputs.hint_level || 'symptom_only' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Cache bare clones — prevents re-cloning on every run
+      - name: Restore repo cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.REPO_CACHE_DIR }}
+          key: eval-repos-${{ hashFiles('dataset/repos/*.json') }}
+          restore-keys: eval-repos-
+
+      - name: Run long-context evals
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ matrix.model }}
+          LONG_CONTEXT_HINT_LEVEL: ${{ matrix.hint_level }}
+          RUN_EVALS: '1'
+          MIN_RFS: ${{ github.event.inputs.min_rfs || '3' }}
+        run: npm run eval:live
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ matrix.model }}-${{ matrix.hint_level }}
+          path: evals/logs/
+          retention-days: 30
+
+  analyze-and-leaderboard:
+    name: Generate leaderboard
+    runs-on: ubuntu-latest
+    needs: eval-matrix
+    if: always() && needs.eval-matrix.result != 'skipped'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Download all model results
+      - name: Download eval results
+        uses: actions/download-artifact@v4
+        with:
+          path: evals/logs/
+          merge-multiple: true
+
+      - name: Run analysis
+        run: npm run analyze
+
+      - name: Generate leaderboard
+        run: npx tsx scripts/leaderboard.ts
+
+      - name: Upload leaderboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: leaderboard-${{ github.run_id }}
+          path: evals/logs/LEADERBOARD.md
+          retention-days: 90
+
+      # On nightly runs, commit the leaderboard back to the repo
+      - name: Commit leaderboard (nightly only)
+        if: github.event_name == 'schedule'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add evals/logs/LEADERBOARD.md
+          git diff --staged --quiet || git commit -m "chore: update long-context eval leaderboard [skip ci]"
+          git push

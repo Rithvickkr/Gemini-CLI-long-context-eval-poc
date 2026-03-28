@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-compression-token-006",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/services/",
+      "packages/core/src/utils/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "cross_component_bug",
+    "prompt": "Users report that after chat history compression runs successfully, the summarization model occasionally returns an error about exceeding the context window, or produces a suspiciously short summary. The compression service reports that the token count is within limits before sending, but the API call fails anyway. The issue seems to happen more often with mixed code and text content. Investigate the token estimation mismatch and fix the pre-flight check.",
+    "hint_levels": {
+      "symptom_only": "After compression runs, the summarization API call occasionally fails with a context window overflow error, or returns a truncated summary. The pre-flight token check passes but the actual API call fails. Happens more with code-heavy conversations.",
+      "file_hint": "The bug is in packages/core/src/services/chatCompressionService.ts around the history selection logic. Compare how estimateTokenCountSync() works versus the actual tokenLimit() constant being compared against.",
+      "function_hint": "At line 347 in chatCompressionService.ts, originalToCompressTokenCount is estimated via character-based heuristics but compared against tokenLimit() which returns exact model limits. The ~15% error margin in heuristic estimation means history that appears safe can overflow the real model context."
+    },
+    "reasoning_forcing_score": 6,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/services/chatCompressionService.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/services/chatCompressionService.ts",
+        "packages/core/src/utils/tokenCalculation.ts",
+        "packages/core/src/core/tokenLimits.ts",
+        "packages/core/src/core/client.ts"
+      ],
+      "key_assertions": [
+        "safety.*margin|buffer|headroom|0\\.(8|85|9)",
+        "estimateToken|tokenCount"
+      ],
+      "negative_assertions": [
+        "tokenLimit.*remove|delete.*tokenLimit"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: summarization API fails despite pre-flight token check passing",
+      "Open chatCompressionService.ts and find the history selection logic at line 347",
+      "Find estimateTokenCountSync() — understand it uses character-based heuristics (~4 chars/token)",
+      "Open tokenCalculation.ts to see heuristic implementation and error margin",
+      "Open tokenLimits.ts to find the hardcoded model token limits",
+      "Realize: heuristic estimation can be 10-20% off for mixed code+text content",
+      "Trace: originalToCompressTokenCount may appear safe but actual API request overflows",
+      "Apply fix: add a safety margin factor (e.g. 0.85) before comparing against tokenLimit"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-20",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.04,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

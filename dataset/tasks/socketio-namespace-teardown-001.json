@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "socketio-namespace-teardown-001",
+  "repository": {
+    "url": "https://github.com/socketio/socket.io",
+    "commit": "e4d016bd5b4dba8646a53616fc8af1a257608c15",
+    "languages": ["TypeScript"],
+    "size_files": 180,
+    "size_lines": 22000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "packages/socket.io/lib/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "race_condition",
+    "prompt": "When cleanupEmptyChildNamespaces is enabled on the server, dynamic child namespaces are destroyed too early. If the last connected socket disconnects while another socket is still mid-handshake, the teardown fires because it only checks the sockets map which only contains fully-connected sockets. Sockets in the middle of running middleware live in a separate internal map and are invisible to the teardown check. The connecting socket then tries to complete its handshake against a namespace whose adapter is already closed and whose entry has been removed from the server, silently failing to connect with no error delivered to the client. Investigate how sockets are tracked during the connection handshake versus after full connection and fix the teardown guard.",
+    "hint_levels": {
+      "symptom_only": "With dynamic child routing scopes and the cleanup-on-empty option enabled, clients occasionally fail to connect silently. The connection attempt hangs with no response from the server. The issue only occurs when another client disconnects at the same time as a new client is connecting to the same scope.",
+      "file_hint": "The bug is in packages/socket.io/lib/parent-namespace.ts at lines 80-91. The teardown condition checks namespace.sockets.size === 0 but only fully-connected sockets are in that map. Sockets mid-handshake are stored in namespace._preConnectSockets in namespace.ts at lines 125-130 and are not checked.",
+      "function_hint": "In parent-namespace.ts at line 85, the teardown fires when namespace.sockets.size === 0. But in namespace.ts _add() at lines 408-451, sockets are placed in _preConnectSockets during async middleware execution and only moved to sockets after _doConnect at lines 461-475. The fix is to also check namespace._preConnectSockets.size === 0 in the teardown condition."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/socket.io/lib/parent-namespace.ts",
+        "packages/socket.io/lib/namespace.ts"
+      ],
+      "files_must_read": [
+        "packages/socket.io/lib/parent-namespace.ts",
+        "packages/socket.io/lib/namespace.ts",
+        "packages/socket.io/lib/socket.ts",
+        "packages/socket.io/lib/client.ts",
+        "packages/socket.io/lib/index.ts"
+      ],
+      "key_assertions": [
+        "_preConnectSockets\\.size|preConnectSockets.*0"
+      ],
+      "negative_assertions": [
+        "cleanupEmptyChildNamespaces.*false|disable.*cleanup"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: connecting sockets silently fail when another socket disconnects simultaneously in a dynamic namespace",
+      "Open parent-namespace.ts and find createChild teardown wrapper at lines 80-91",
+      "Find teardown condition: namespace.sockets.size === 0 triggers adapter.close() and namespace removal",
+      "Open namespace.ts and find _add() at lines 408-451 — sockets go into _preConnectSockets during async middleware",
+      "Find _doConnect at lines 461-475 — only here does the socket move from _preConnectSockets into sockets map",
+      "Find _preConnectSockets declaration at lines 125-130 — private map invisible to parent-namespace teardown",
+      "Open socket.ts and trace _cleanup() to confirm it calls nsp._remove() which triggers the teardown check",
+      "Realize: teardown fires when sockets.size hits 0 but _preConnectSockets may still have entries",
+      "Apply fix: change teardown condition to check both namespace.sockets.size === 0 && namespace._preConnectSockets.size === 0"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.04,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

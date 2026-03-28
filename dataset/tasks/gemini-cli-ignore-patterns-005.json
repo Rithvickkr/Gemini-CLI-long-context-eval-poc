@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-ignore-patterns-005",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/utils/",
+      "packages/core/src/services/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "cross_component_bug",
+    "prompt": "Gemini CLI does not correctly handle .gitignore and .geminiignore patterns that target directories. Patterns like 'node_modules/' or 'dist/' that end with a trailing slash should match only directories, but the ignore resolution code does not distinguish between files and directories when checking patterns. This causes directory-only patterns to fail silently — directories that should be ignored are still traversed and their contents indexed. On Windows, the bug is compounded by path separator differences (backslash vs forward slash). Investigate the ignore pattern handling and fix directory matching.",
+    "hint_levels": {
+      "symptom_only": "Directory-specific ignore patterns (ending with /) don't work correctly. Directories like node_modules/ and dist/ are still traversed even when listed in .gitignore or .geminiignore.",
+      "file_hint": "The bug spans packages/core/src/utils/gitIgnoreParser.ts, packages/core/src/utils/ignoreFileParser.ts, and packages/core/src/services/fileDiscoveryService.ts. The isIgnored() method does not accept or pass an isDirectory parameter.",
+      "function_hint": "In gitIgnoreParser.ts, isIgnored() at line 118 takes only a filePath string but no isDirectory boolean. The ignore library needs a trailing slash appended to directory paths to match directory-only patterns. fileDiscoveryService.ts needs separate shouldIgnoreFile() and shouldIgnoreDirectory() methods that pass the correct isDirectory flag."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/utils/gitIgnoreParser.ts",
+        "packages/core/src/utils/ignoreFileParser.ts",
+        "packages/core/src/services/fileDiscoveryService.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/utils/gitIgnoreParser.ts",
+        "packages/core/src/utils/ignoreFileParser.ts",
+        "packages/core/src/services/fileDiscoveryService.ts",
+        "packages/core/src/utils/gitIgnoreParser.test.ts",
+        "packages/core/src/services/fileDiscoveryService.test.ts"
+      ],
+      "key_assertions": [
+        "isDirectory",
+        "shouldIgnoreDirectory",
+        "trailing",
+        "slash",
+        "path.sep"
+      ],
+      "negative_assertions": [
+        "recursive.*readdir"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: directory-only ignore patterns not working, directories still traversed",
+      "Open gitIgnoreParser.ts and find isIgnored() at line 118 — takes only filePath, no isDirectory parameter",
+      "Open ignoreFileParser.ts and find isIgnored() at line 77 — same issue, no directory distinction",
+      "Understand the ignore library convention: directory paths must end with / to match directory-only patterns",
+      "Open fileDiscoveryService.ts and find shouldIgnoreFile() — only one method for both files and directories",
+      "Realize the fix needs: (1) add isDirectory parameter to isIgnored(), (2) append trailing / for directories, (3) normalize path separators for Windows",
+      "Check getFolderStructure.ts and bfsFileSearch.ts to find all callers that need updating",
+      "Open the test files to understand existing test patterns and add directory-specific test cases",
+      "Apply fix: create path normalization utility, update isIgnored() signatures, split shouldIgnoreFile/shouldIgnoreDirectory in fileDiscoveryService"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-10",
+      "fix_merged": "2026-03-27",
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.1,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": {
+      "test_command": "npx vitest run",
+      "fail_to_pass": [
+        "should return true for git-ignored directories",
+        "should handle directory-only patterns with trailing slash"
+      ],
+      "pass_to_pass": [
+        "should return true for git-ignored files",
+        "should return false for non-ignored files",
+        "should handle negation patterns"
+      ]
+    },
+    "cleanup": "delete_workspace"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "nestjs-transient-scope-isolation-001",
+  "repository": {
+    "url": "https://github.com/nestjs/nest",
+    "commit": "0fddd2efbed8ccd20ea77f963bcde2712db1920a",
+    "languages": ["TypeScript"],
+    "size_files": 520,
+    "size_lines": 65000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "packages/core/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "cross_component_bug",
+    "prompt": "When two DEFAULT-scoped providers each inject the same TRANSIENT provider chain, the nested transient providers are silently shared between them instead of being isolated. Each DEFAULT-scoped provider should receive its own independent instance of the transient chain, but in STATIC context they all receive the same instance. Logging the instance identity inside the nested transient provider confirms the same object is injected regardless of which DEFAULT provider is the requester. Investigate how the injector determines the effective inquirer for transient resolution and why static context is treated differently.",
+    "hint_levels": {
+      "symptom_only": "Two different providers that each inject a TRANSIENT-scoped provider receive the same instance instead of separate instances. The isolation that TRANSIENT scope promises is silently violated in the default application context.",
+      "file_hint": "The bug is in packages/core/injector/injector.ts in the getEffectiveInquirer method at lines 1010-1022. The condition includes contextId !== STATIC_CONTEXT which prevents parent-inquirer propagation from activating in static context. Without this propagation, both transient chains resolve with the same class-based inquirerId key and share the same instance from the transientMap in instance-wrapper.ts.",
+      "function_hint": "In injector.ts getEffectiveInquirer at line 1019, the condition contextId !== STATIC_CONTEXT causes the method to return inquirer instead of parentInquirer when in static context. In instance-wrapper.ts getInstanceByInquirerId at lines 172-185, the transientMap is keyed by inquirerId which is class-based, so both transient chains hit the same key. Removing or adjusting the STATIC_CONTEXT guard fixes the isolation."
+    },
+    "reasoning_forcing_score": 9,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 5
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/injector/injector.ts"
+      ],
+      "files_must_read": [
+        "packages/core/injector/injector.ts",
+        "packages/core/injector/instance-wrapper.ts",
+        "packages/core/injector/abstract-instance-resolver.ts",
+        "packages/core/injector/instance-loader.ts",
+        "packages/core/injector/constants.ts"
+      ],
+      "key_assertions": [
+        "STATIC_CONTEXT|parentInquirer|getEffectiveInquirer"
+      ],
+      "negative_assertions": [
+        "transient.*disable|scope.*ignore"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: two DEFAULT providers inject TRANSIENT chain but get same instance in static context",
+      "Open injector.ts and find resolveConstructorParams at line 477 where getEffectiveInquirer is called",
+      "Find getEffectiveInquirer at lines 1010-1022 — the condition requires contextId !== STATIC_CONTEXT to return parentInquirer",
+      "Open instance-wrapper.ts and find getInstanceByContextId at lines 150-170 — routes transient via inquirerId",
+      "Find getInstanceByInquirerId at lines 172-185 — transientMap keyed by inquirerId which is class-based not instance-based",
+      "Open constants.ts and confirm STATIC_CONTEXT constant definition",
+      "Find attachRootInquirer at lines 380-388 — understand how root inquirer propagation is intended to work",
+      "Realize: in STATIC_CONTEXT the parentInquirer propagation is disabled so both transient chains use same class-key and get same instance",
+      "Apply fix: remove contextId !== STATIC_CONTEXT guard from getEffectiveInquirer or add equivalent handling for static context"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

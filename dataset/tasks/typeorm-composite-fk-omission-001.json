@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "typeorm-composite-fk-omission-001",
+  "repository": {
+    "url": "https://github.com/typeorm/typeorm",
+    "commit": "0801b85c4e78166ebaffe90b2024c9cf6fcb295d",
+    "languages": ["TypeScript"],
+    "size_files": 680,
+    "size_lines": 95000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "src/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "When two ManyToOne relations on the same entity share a physical join column (for example both relations reference a region column as part of a composite foreign key), calling repository.save() silently omits that shared column from the INSERT statement. The result is either a NOT NULL constraint violation at the database level or a NULL being silently written if the column is nullable. No TypeORM error is thrown — the failure comes from the database. Investigate how shared join columns are registered in entity metadata and how the persistence layer decides which columns to include in the change set.",
+    "hint_levels": {
+      "symptom_only": "Saving an entity that has two relations sharing a physical database column causes that column to be silently omitted from the INSERT or UPDATE statement. The database throws a constraint violation. No ORM-level error or warning is produced.",
+      "file_hint": "The bug spans src/metadata-builder/RelationJoinColumnBuilder.ts and src/persistence/SubjectChangedColumnsComputer.ts. In RelationJoinColumnBuilder.ts at lines 243-250, shared physical columns are cloned instead of reusing the same reference, creating duplicate ColumnMetadata entries in the entity metadata. In SubjectChangedColumnsComputer.ts at lines 97-101, a column that belongs to a relation triggers an early return, so the duplicated shared column is never included in the final change set.",
+      "function_hint": "In RelationJoinColumnBuilder.ts collectColumns() at line 246, OrmUtils.cloneObject(relationalColumn) creates a distinct ColumnMetadata per relation for shared columns. In SubjectChangedColumnsComputer.ts computeDiffColumns() at line 101, when column.relationMetadata returns a value the column is skipped. The fix requires either not cloning shared physical columns in the builder, or making the early return conditional on whether the relation value can fully resolve all join columns."
+    },
+    "reasoning_forcing_score": 9,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 5
+    },
+    "expected_changes": {
+      "files_modified": [
+        "src/persistence/SubjectChangedColumnsComputer.ts",
+        "src/metadata-builder/RelationJoinColumnBuilder.ts"
+      ],
+      "files_must_read": [
+        "src/metadata-builder/RelationJoinColumnBuilder.ts",
+        "src/persistence/SubjectChangedColumnsComputer.ts",
+        "src/persistence/Subject.ts",
+        "src/metadata/ColumnMetadata.ts",
+        "src/metadata/RelationMetadata.ts"
+      ],
+      "key_assertions": [
+        "cloneObject|referencedColumn.*shared|early.*return.*composite"
+      ],
+      "negative_assertions": [
+        "columns.*clear|metadata.*reset"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: shared join column silently omitted from INSERT when two relations reference the same physical column",
+      "Open RelationJoinColumnBuilder.ts and find collectColumns() at lines 209-259",
+      "Find line 246: OrmUtils.cloneObject(relationalColumn) creates a separate ColumnMetadata per relation for the shared column",
+      "Realize this registers two ColumnMetadata entries for the same database column in entity metadata",
+      "Open SubjectChangedColumnsComputer.ts and find computeDiffColumns() at lines 38-244",
+      "Find early return at line 101: if column.relationMetadata has a value, skip the column",
+      "Open RelationMetadata.ts and find getRelationIdMap() at line 421 — for scalar IDs on composite keys it only resolves the first referenced column",
+      "Open Subject.ts and find createValueSetAndPopChangeMap() at lines 273-327 — confirms shared column never reaches the final value set",
+      "Apply fix: in RelationJoinColumnBuilder.ts return the original shared column reference instead of cloning, or in SubjectChangedColumnsComputer.ts make the early return conditional on full composite key resolution"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "typeorm-mysql-upsert-id-corrupt-002",
+  "repository": {
+    "url": "https://github.com/typeorm/typeorm",
+    "commit": "0801b85c4e78166ebaffe90b2024c9cf6fcb295d",
+    "languages": ["TypeScript"],
+    "size_files": 680,
+    "size_lines": 95000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "src/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "Calling repository.upsert() on MySQL silently overwrites the id property of entities that were updated (not inserted) with a phantom auto-increment value that was never written to the database. MySQL's ON DUPLICATE KEY UPDATE protocol returns a non-zero insertId in the result packet for both inserts and updates, but for updates this is the next reserved auto-increment sequence value, not the actual primary key of the updated row. TypeORM's MySQL driver reads this insertId unconditionally and writes it back to every entity passed to upsert(), corrupting in-memory state with no error or warning. Any code that references entity.id after the upsert call is working with wrong data. Investigate how the MySQL driver handles generated values for upsert operations versus plain inserts and add the missing update-vs-insert distinction.",
+    "hint_levels": {
+      "symptom_only": "After calling upsert() on MySQL, the id fields of entities that were updated (not newly inserted) contain wrong values. Subsequent operations using those ids target non-existent rows. No error is thrown by the ORM. The corruption only affects entities that triggered the ON DUPLICATE KEY UPDATE path.",
+      "file_hint": "The bug is in src/driver/mysql/MysqlDriver.ts in the createGeneratedMap() method at lines 966-994. It assigns insertResult.insertId + entityIndex to every entity unconditionally, with no check for whether the result was an insert or an update. MySQL sets affectedRows=1 for inserts and affectedRows=2 for updates but TypeORM never reads this per-row to skip the ID assignment for updated rows.",
+      "function_hint": "In MysqlDriver.ts createGeneratedMap() at line 979, the expression insertResult.insertId + entityIndex is assigned with no upsert guard. In InsertQueryBuilder.ts execute() at line 218, returningResultsEntityUpdator.insert() applies this generated map back to the entity objects unconditionally. The fix is to pass upsert context to createGeneratedMap() and skip the ID assignment when affectedRows === 2 for a given entity slot, indicating an update rather than an insert."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "src/driver/mysql/MysqlDriver.ts",
+        "src/query-builder/InsertQueryBuilder.ts"
+      ],
+      "files_must_read": [
+        "src/driver/mysql/MysqlDriver.ts",
+        "src/query-builder/InsertQueryBuilder.ts",
+        "src/metadata/ColumnMetadata.ts",
+        "src/metadata/EntityMetadata.ts"
+      ],
+      "key_assertions": [
+        "affectedRows|insertId.*upsert|isUpsert"
+      ],
+      "negative_assertions": [
+        "insertId.*always|skip.*generated"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: upsert() on MySQL corrupts entity id fields for updated rows with phantom auto-increment values",
+      "Open InsertQueryBuilder.ts and find execute() at line 218 — returningResultsEntityUpdator.insert() applies generated map to entities unconditionally",
+      "Trace into ReturningResultsEntityUpdator — find it calls driver.createGeneratedMap() per entity",
+      "Open MysqlDriver.ts and find createGeneratedMap() at lines 966-994",
+      "Find line 979: insertResult.insertId + entityIndex assigned with no conditional for insert vs update",
+      "Understand MySQL protocol: ON DUPLICATE KEY UPDATE sets affectedRows=1 for insert, affectedRows=2 for update, but insertId is always set",
+      "Open ColumnMetadata.ts and find setEntityValue() at line 851 — confirms generated map is written directly onto entity object reference",
+      "Realize: createGeneratedMap() has no upsert context and never inspects affectedRows per entity index",
+      "Apply fix: check affectedRows per entity index in createGeneratedMap() and return undefined for updated rows to prevent ID overwrite"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

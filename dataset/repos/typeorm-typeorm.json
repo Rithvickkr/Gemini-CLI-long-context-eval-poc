@@ -1,0 +1,19 @@
+{
+  "repo_id": "typeorm-typeorm",
+  "url": "https://github.com/typeorm/typeorm",
+  "commit": "0801b85c4e78166ebaffe90b2024c9cf6fcb295d",
+  "languages": ["TypeScript"],
+  "size_files": 680,
+  "size_lines": 95000,
+  "license": "MIT",
+  "description": "ORM for TypeScript and JavaScript — entity metadata, query builder, relations, and multi-database driver support",
+  "stars": 34000,
+  "sparse_checkout_paths": [
+    "src/"
+  ],
+  "task_ids": [
+    "typeorm-composite-fk-omission-001",
+    "typeorm-mysql-upsert-id-corrupt-002"
+  ],
+  "verified_at": "2026-03-28"
+}

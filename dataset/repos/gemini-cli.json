@@ -1,0 +1,27 @@
+{
+  "repo_id": "gemini-cli",
+  "url": "https://github.com/google-gemini/gemini-cli",
+  "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+  "languages": ["TypeScript", "JavaScript"],
+  "size_files": 76189,
+  "size_lines": 150000,
+  "license": "Apache-2.0",
+  "description": "Google's official CLI for Gemini AI models — monorepo with core, cli, a2a-server, and test-utils packages",
+  "stars": 50000,
+  "sparse_checkout_paths": [
+    "packages/core/src/",
+    "packages/cli/src/",
+    "evals/"
+  ],
+  "task_ids": [
+    "gemini-cli-sniffchunks-oom-001",
+    "gemini-cli-bfs-symlinks-002",
+    "gemini-cli-extension-race-003",
+    "gemini-cli-inputblocker-silent-004",
+    "gemini-cli-ignore-patterns-005",
+    "gemini-cli-compression-token-006",
+    "gemini-cli-loop-detection-007",
+    "gemini-cli-llm-check-interval-008"
+  ],
+  "verified_at": "2026-03-28"
+}

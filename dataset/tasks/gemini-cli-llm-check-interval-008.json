@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-llm-check-interval-008",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/services/",
+      "packages/core/src/core/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "resource_leak",
+    "prompt": "Over long sessions with many multi-turn prompts, users notice the CLI becomes gradually slower and consumes more API quota than expected. Profiling shows the LLM-based loop check is firing more frequently than its configured interval (every 6-8 turns instead of every 10-15). The interval appears to drift across prompts even though each prompt resets the loop detector state. Investigate and fix the interval drift across prompt resets.",
+    "hint_levels": {
+      "symptom_only": "After several multi-turn prompts in a single session, LLM loop detection fires more frequently than configured, consuming extra API quota and slowing responses. The over-checking worsens with each new prompt.",
+      "file_hint": "The bug is in packages/core/src/services/loopDetectionService.ts in the reset() method and updateCheckInterval() logic. The interval calculation uses floating-point arithmetic that can stabilize at a sub-optimal value across prompt resets.",
+      "function_hint": "At lines 710-715, llmCheckInterval = Math.round(5 + 10 * (1 - confidence)). When confidence hovers just below threshold (e.g. 0.88), this stabilizes at 6-7 rather than ever reaching MAX_LLM_CHECK_INTERVAL (15). The reset() method resets turnsInCurrentPrompt but the accumulated interval drift from low-confidence patterns persists."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_file",
+      "domain_knowledge": "architecture_level",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/services/loopDetectionService.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/services/loopDetectionService.ts",
+        "packages/core/src/core/client.ts",
+        "packages/core/src/hooks/types.ts",
+        "packages/core/src/services/loopDetectionService.test.ts"
+      ],
+      "key_assertions": [
+        "llmCheckInterval|checkInterval",
+        "reset|DEFAULT_LLM_CHECK_INTERVAL"
+      ],
+      "negative_assertions": [
+        "disable.*llm|remove.*check"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: LLM loop check fires too frequently across prompts, drifts with each session",
+      "Open loopDetectionService.ts and find the reset() method",
+      "Find llmCheckInterval and DEFAULT_LLM_CHECK_INTERVAL constants",
+      "Find updateCheckInterval() at lines 710-715 — interval formula using confidence",
+      "Trace: with confidence 0.88, interval = round(5 + 10*0.12) = 6, never reaches 15",
+      "Open client.ts to see when reset() is called between prompts",
+      "Open hooks/types.ts to understand prompt lifecycle events",
+      "Read test file to see what interval behavior is expected",
+      "Apply fix: ensure reset() fully resets llmCheckInterval to DEFAULT, not just turnsInCurrentPrompt"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-21",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.04,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

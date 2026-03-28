@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "express-query-param-truncation-002",
+  "repository": {
+    "url": "https://github.com/expressjs/express",
+    "commit": "dc538f6e810bd462c98ee7e6aae24c64d4b1da93",
+    "languages": ["JavaScript"],
+    "size_files": 42,
+    "size_lines": 5500,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "lib/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "When a request contains more than 1000 query string parameters, Express silently drops all parameters beyond the 1000th. The qs library used for extended query string parsing has a hardcoded default parameterLimit of 1000 and silently truncates the parsed output. Express's query middleware never checks for truncation and calls next() as if req.query is complete. This is inconsistent with express.json() and express.urlencoded() which both throw a PayloadTooLargeError when limits are exceeded. Investigate how the query parser is configured and threaded through from application settings to the middleware, and add the missing limit handling.",
+    "hint_levels": {
+      "symptom_only": "Requests with a very large number of URL parameters silently arrive at route handlers with an incomplete parsed parameter object. Parameters beyond an internal limit are dropped with no error, no 400 response, and no warning in logs.",
+      "file_hint": "The bug is in lib/middleware/query.js at lines 34-43 and lib/utils.js in parseExtendedQueryString. The query middleware calls qs.parse without setting parameterLimit or checking for overflow. The default qs parameterLimit of 1000 silently truncates the result. The app default is 'extended' parser set in lib/application.js defaultConfiguration().",
+      "function_hint": "In lib/utils.js parseExtendedQueryString() calls qs.parse(str, { allowPrototypes: true }) with no parameterLimit. In lib/middleware/query.js lines 39-43 the middleware calls queryparse(val, opts) and unconditionally calls next() with no truncation check. The fix is to pass a parameterLimit or throwOnLimitExceeded option to qs.parse in parseExtendedQueryString and propagate errors via next(err) in the query middleware."
+    },
+    "reasoning_forcing_score": 6,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 3,
+      "languages_required": 1,
+      "reasoning_steps": 6,
+      "context_depth": "cross_function",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "lib/middleware/query.js",
+        "lib/utils.js"
+      ],
+      "files_must_read": [
+        "lib/middleware/query.js",
+        "lib/utils.js",
+        "lib/application.js"
+      ],
+      "key_assertions": [
+        "parameterLimit|throwOnLimitExceeded|next.*err"
+      ],
+      "negative_assertions": [
+        "query.*disable|remove.*parser"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: req.query silently truncated at 1000 parameters with no error",
+      "Open lib/application.js and find defaultConfiguration() — this.set('query parser', 'extended') is the default",
+      "Find app.set() logic — when 'query parser' is set it immediately calls compileQueryParser() and stores as 'query parser fn'",
+      "Open lib/utils.js and find compileQueryParser() — 'extended' maps to parseExtendedQueryString",
+      "Find parseExtendedQueryString() — calls qs.parse(str, { allowPrototypes: true }) with no parameterLimit",
+      "Open lib/middleware/query.js and find the middleware factory at lines 34-43",
+      "Find queryparse(val, opts) call — no truncation check, next() called unconditionally",
+      "Realize: qs default parameterLimit=1000 silently drops excess params, unlike body parser which throws PayloadTooLargeError",
+      "Apply fix: add parameterLimit or throwOnLimitExceeded to qs.parse call in parseExtendedQueryString, and propagate errors via next(err) in query middleware"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.04,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

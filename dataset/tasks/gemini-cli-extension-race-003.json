@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-extension-race-003",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/utils/",
+      "packages/core/src/config/",
+      "packages/cli/src/config/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "race_condition",
+    "prompt": "When multiple Gemini CLI extensions are loaded concurrently, the extension loading status counters sometimes report incorrect values, causing the system to believe all extensions have loaded when some are still starting, or to wait indefinitely for extensions that have already completed. This manifests as intermittent failures where memory refresh is skipped or delayed. The issue occurs specifically when extensions start or stop at the same time via Promise.all. Investigate the extension loading mechanism and fix the race condition.",
+    "hint_levels": {
+      "symptom_only": "Extension loading sometimes reports incorrect completion status. Memory refresh is intermittently skipped or delayed indefinitely when multiple extensions load concurrently.",
+      "file_hint": "The bug is in packages/core/src/utils/extensionLoader.ts. Look at the shared counter variables and how they're accessed during concurrent Promise.all operations in the start() method.",
+      "function_hint": "Protected counter variables at lines 17-20 (startingCount, startCompletedCount, stoppingCount, stopCompletedCount) are incremented without synchronization in startExtension() at line 69 and stopExtension() at line 176. When Promise.all runs multiple startExtension() calls concurrently, the non-atomic read-modify-write of ++ can lose increments, causing maybeRefreshMemories() at line 114 to malfunction."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_package",
+      "domain_knowledge": "architecture_level",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/utils/extensionLoader.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/utils/extensionLoader.ts",
+        "packages/core/src/utils/extensionLoader.test.ts",
+        "packages/cli/src/config/extension-manager.ts",
+        "packages/core/src/utils/memoryDiscovery.ts",
+        "packages/core/src/utils/events.ts"
+      ],
+      "key_assertions": [
+        "startingCount",
+        "startCompletedCount",
+        "mutex",
+        "lock",
+        "queue",
+        "semaphore",
+        "serialize"
+      ],
+      "negative_assertions": [
+        "setTimeout.*retry"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: intermittent extension loading failures and skipped memory refresh",
+      "Open extensionLoader.ts and find the counter variables at lines 17-20",
+      "Find startExtension() at line 65 — increments startingCount at line 69 and startCompletedCount at line 101",
+      "Find stopExtension() at line 172 — increments stoppingCount at line 176 and stopCompletedCount at line 215",
+      "Find the start() method with Promise.all at lines 46-50 — runs multiple startExtension() concurrently",
+      "Open extension-manager.ts and find loadExtensions() with Promise.all at lines 658-660 — another concurrent entry point",
+      "Find maybeRefreshMemories() at line 114 — compares startingCount === startCompletedCount to decide if all loads are done",
+      "Realize the ++ operator is non-atomic: concurrent read-modify-write can lose increments, causing the comparison to never be true",
+      "Apply fix: serialize counter access with a mutex/queue, or use an atomic counter pattern, or serialize extension loading"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-14",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": null,
+    "cleanup": "delete_workspace"
+  }
+}

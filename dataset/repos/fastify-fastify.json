@@ -1,0 +1,21 @@
+{
+  "repo_id": "fastify-fastify",
+  "url": "https://github.com/fastify/fastify",
+  "commit": "d457aeda8611777389c7e4713a288eb7ddb9a389",
+  "languages": ["JavaScript"],
+  "size_files": 424,
+  "size_lines": 50000,
+  "license": "MIT",
+  "description": "Fast and low overhead web framework for Node.js — plugin architecture with hook lifecycle and schema-based serialization",
+  "stars": 33000,
+  "sparse_checkout_paths": [
+    "lib/",
+    "fastify.js"
+  ],
+  "task_ids": [
+    "fastify-content-type-duplicate-001",
+    "fastify-onroute-hook-scope-002",
+    "fastify-stream-headers-dropped-003"
+  ],
+  "verified_at": "2026-03-28"
+}

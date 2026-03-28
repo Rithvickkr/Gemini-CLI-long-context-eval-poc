@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "vite-hmr-memory-leak-001",
+  "repository": {
+    "url": "https://github.com/vitejs/vite",
+    "commit": "f516f2ee570f9abe27c8b01ee05b6f0dc0c7dc5e",
+    "languages": ["TypeScript"],
+    "size_files": 3800,
+    "size_lines": 180000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "packages/vite/src/node/server/",
+      "packages/vite/src/node/plugins/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "resource_leak",
+    "prompt": "In long-running Vite dev server sessions, memory usage grows steadily over time when files are frequently edited. Each HMR (Hot Module Replacement) update leaves behind stale module graph entries that are never cleaned up. After hundreds of file edits, the dev server's memory footprint can grow to several gigabytes, eventually causing the Node.js process to crash with an out-of-memory error. Investigate the module graph cleanup during HMR invalidation and fix the memory leak.",
+    "hint_levels": {
+      "symptom_only": "Vite dev server memory grows continuously during development with frequent file edits. After many HMR updates, the process crashes with OOM. Memory profiling shows the module graph accumulating stale entries.",
+      "file_hint": "The bug is in packages/vite/src/node/server/moduleGraph.ts. When HMR invalidation runs, stale module entries are marked as invalid but the invalidatedModules Set is never pruned. Cross-reference with packages/vite/src/node/plugins/importAnalysis.ts to see how the graph is built.",
+      "function_hint": "In moduleGraph.ts, invalidateModule() marks modules but the module graph's urlToModuleMap and idToModuleMap keep growing. The HMR handler in hmr.ts calls invalidateModule() recursively but never calls a corresponding cleanup. Compare with how CSS modules are cleaned in cssAnalysis.ts."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/vite/src/node/server/moduleGraph.ts"
+      ],
+      "files_must_read": [
+        "packages/vite/src/node/server/moduleGraph.ts",
+        "packages/vite/src/node/server/hmr.ts",
+        "packages/vite/src/node/plugins/importAnalysis.ts",
+        "packages/vite/src/node/plugins/css.ts",
+        "packages/vite/src/node/server/index.ts"
+      ],
+      "key_assertions": [
+        "delete|prune|cleanup|remove",
+        "urlToModuleMap|idToModuleMap"
+      ],
+      "negative_assertions": [
+        "disable.*hmr|skip.*invalidat"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: dev server memory grows with each HMR update, OOM after many edits",
+      "Open moduleGraph.ts and map the data structures: urlToModuleMap, idToModuleMap, etagToModuleMap",
+      "Find invalidateModule() — it marks modules but does it remove them from the maps?",
+      "Open hmr.ts to see how HMR updates call invalidateModule() recursively",
+      "Open importAnalysis.ts to see how new module entries are added to the graph on each request",
+      "Trace: each file change creates new graph entries but old stale ones are never deleted",
+      "Open css.ts to see if CSS module cleanup gives hints about the expected pattern",
+      "Apply fix: add pruning logic that removes entries from urlToModuleMap/idToModuleMap after invalidation"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-02-10",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.06,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

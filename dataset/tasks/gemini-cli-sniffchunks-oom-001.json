@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-sniffchunks-oom-001",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/services/",
+      "packages/core/src/utils/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "unbounded_growth",
+    "prompt": "When running long-lived shell commands that produce large amounts of output (e.g., `find / -type f` or streaming logs), the Gemini CLI process memory grows without bound and eventually crashes with an out-of-memory error. The CLI correctly truncates the main output buffer, but something else is accumulating data without any size limit. Investigate and fix the unbounded memory growth in shell command execution.",
+    "hint_levels": {
+      "symptom_only": "Running shell commands with large output causes OOM crashes. The main output buffer is truncated correctly, but memory still grows without bound.",
+      "file_hint": "The bug is in packages/core/src/services/shellExecutionService.ts. Look at how sniff chunks are accumulated compared to how the main output buffer is managed.",
+      "function_hint": "In childProcessFallback() at line 569 and executeWithPty() at line 1003, state.sniffChunks.push(data) accumulates Buffer objects without any size limit, unlike state.output which uses appendAndTruncate()."
+    },
+    "reasoning_forcing_score": 5,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 1,
+      "languages_required": 1,
+      "reasoning_steps": 6,
+      "context_depth": "cross_function",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/services/shellExecutionService.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/services/shellExecutionService.ts"
+      ],
+      "key_assertions": [
+        "sniffChunks",
+        "MAX_SNIFF_SIZE",
+        "slice",
+        "length"
+      ],
+      "negative_assertions": [
+        "appendAndTruncate.*output.*remove"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: OOM during large shell output, but main buffer is truncated correctly",
+      "Open shellExecutionService.ts and search for buffer accumulation patterns",
+      "Find appendAndTruncate() at line 314 — this correctly caps state.output at MAX_CHILD_PROCESS_BUFFER_SIZE (16MB)",
+      "Find sniffChunks.push(data) at line 569 in childProcessFallback() — no size limit",
+      "Find sniffChunks.push(data) at line 1003 in executeWithPty() — same unbounded pattern",
+      "Realize both locations guard with isStreamingRawContent && sniffedBytes < MAX_SNIFF_SIZE but this only controls whether to START sniffing, not total accumulation",
+      "Apply fix: add a sliding window or cap on sniffChunks array, similar to how output uses appendAndTruncate()"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-15",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": null,
+    "cleanup": "delete_workspace"
+  }
+}

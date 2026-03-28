@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "koa-origin-proxy-001",
+  "repository": {
+    "url": "https://github.com/koajs/koa",
+    "commit": "e0ba8ef39d27fe5dae5492f9fe753d155124f994",
+    "languages": ["JavaScript"],
+    "size_files": 12,
+    "size_lines": 3500,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "lib/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "When a Koa application runs behind a reverse proxy with app.proxy = true, ctx.origin returns the wrong scheme. Every other proxy-aware getter like ctx.protocol and ctx.href correctly reads X-Forwarded-Proto to determine whether the connection is HTTPS, but ctx.origin silently reads the raw Origin request header and returns an http:// URL even when the client connected over HTTPS. CORS logic, OAuth callbacks, and any redirect URLs built from ctx.origin are silently broken with no error thrown. Investigate how other protocol-sensitive getters handle the proxy setting and fix the origin getter to be consistent.",
+    "hint_levels": {
+      "symptom_only": "When the app sits behind a reverse proxy, the origin value returned to clients uses the wrong protocol scheme. Other URL-related values on the context are correct, but this specific value is always wrong for proxied HTTPS connections. No error is thrown.",
+      "file_hint": "The bug is in lib/request.js in the origin getter at line 55. It reads this.req.headers.origin directly, bypassing the proxy-aware protocol getter. Compare it with get protocol() at line 460 which correctly checks app.proxy and reads X-Forwarded-Proto.",
+      "function_hint": "At line 55-57 in lib/request.js, get origin() returns this.req.headers.origin. But get protocol() at line 460 and get href() at line 63 both use this.protocol and this.host which respect app.proxy. The fix is to rebuild origin from this.protocol and this.host instead of reading the raw header."
+    },
+    "reasoning_forcing_score": 6,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 6,
+      "context_depth": "cross_function",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "lib/request.js"
+      ],
+      "files_must_read": [
+        "lib/application.js",
+        "lib/request.js",
+        "lib/context.js",
+        "lib/response.js"
+      ],
+      "key_assertions": [
+        "this\\.protocol.*this\\.host|protocol.*host.*origin"
+      ],
+      "negative_assertions": [
+        "req\\.headers\\.origin|headers\\[.origin"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: ctx.origin returns wrong scheme behind reverse proxy",
+      "Open lib/application.js and find where app.proxy is stored",
+      "Open lib/request.js and locate get origin() at line 55 — reads raw this.req.headers.origin",
+      "Find get protocol() at line 460 — checks app.proxy and reads X-Forwarded-Proto correctly",
+      "Find get href() at line 63 — uses this.protocol and this.host (proxy-aware)",
+      "Open lib/context.js delegation table — confirm ctx.origin maps to request.origin",
+      "Realize: origin getter does not use this.protocol or this.host, bypassing proxy logic",
+      "Apply fix: rewrite get origin() to return this.protocol + '://' + this.host"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

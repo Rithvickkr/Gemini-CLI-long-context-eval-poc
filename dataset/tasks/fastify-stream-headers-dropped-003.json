@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "fastify-stream-headers-dropped-003",
+  "repository": {
+    "url": "https://github.com/fastify/fastify",
+    "commit": "d457aeda8611777389c7e4713a288eb7ddb9a389",
+    "languages": ["JavaScript"],
+    "size_files": 424,
+    "size_lines": 50000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "lib/",
+      "fastify.js"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "Custom response headers set via reply.header() are silently dropped when the route handler returns a stream payload. The headers are correctly applied when returning strings, buffers, or objects — but stream responses arrive at the client without the custom headers. No error is thrown and the response status code is correct, making this very difficult to debug. Investigate how stream responses are sent versus other payload types and fix the header application path.",
+    "hint_levels": {
+      "symptom_only": "Custom HTTP response headers are silently missing when the route handler returns a streaming payload. The same headers are correctly applied for non-stream payloads. No errors are thrown.",
+      "file_hint": "The bug is in lib/reply.js in the onSendEnd function. Stream payloads take a different code path (sendStream) that never calls safeWriteHead(), unlike null/buffer/string payloads which all call safeWriteHead() to flush pending headers.",
+      "function_hint": "At line 651-654 in reply.js, stream detection immediately calls sendStream() and returns. Inside sendStream() at line 813, headers are set via res.setHeader() conditionally. But safeWriteHead() at line 563 which flushes reply[kReplyHeaders] to the response is never called for streams — so custom headers added via reply.header() are lost."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_function",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "lib/reply.js"
+      ],
+      "files_must_read": [
+        "lib/reply.js",
+        "lib/symbols.js",
+        "lib/hooks.js",
+        "fastify.js"
+      ],
+      "key_assertions": [
+        "safeWriteHead|kReplyHeaders|setHeader.*trailer|writeHead"
+      ],
+      "negative_assertions": [
+        "reply\\.header.*remove|headers.*clear"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: reply.header() values are lost for stream responses",
+      "Open lib/reply.js and find onSendEnd() — the central dispatch for all response types",
+      "Trace path for null payload (line 620): calls safeWriteHead() — headers applied correctly",
+      "Trace path for string/buffer payload (line 667): calls safeWriteHead() — headers applied",
+      "Trace path for stream payload (line 651): immediately calls sendStream() and returns — no safeWriteHead()",
+      "Open sendStream() at line 768 — uses res.setHeader() but never reads reply[kReplyHeaders]",
+      "Find safeWriteHead() at line 563 — this is where reply[kReplyHeaders] is flushed",
+      "Realize: stream path skips safeWriteHead() entirely, losing all custom headers",
+      "Apply fix: call safeWriteHead() before sendStream(), or apply reply[kReplyHeaders] inside sendStream()"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

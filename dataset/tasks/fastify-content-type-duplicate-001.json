@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "fastify-content-type-duplicate-001",
+  "repository": {
+    "url": "https://github.com/fastify/fastify",
+    "commit": "d457aeda8611777389c7e4713a288eb7ddb9a389",
+    "languages": ["JavaScript"],
+    "size_files": 424,
+    "size_lines": 50000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "lib/",
+      "fastify.js"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "In a Fastify application, registering a custom body parser for 'application/json' twice does not throw an error as expected — the second registration silently overwrites the first with no warning. Users relying on the duplicate-registration guard to protect their parser configuration are surprised when their original parser is replaced without any indication. Investigate the content-type parser registration logic and fix the duplicate detection.",
+    "hint_levels": {
+      "symptom_only": "Registering the same content-type parser twice should throw an error but instead silently overwrites the first parser. No warning or error is produced, making it impossible to catch accidental double-registration.",
+      "file_hint": "The bug is in lib/content-type-parser.js in the existingParser() function. It checks for duplicates using the raw contentType string but parsers are stored under normalized keys, so the has() check always misses existing entries.",
+      "function_hint": "At line 108, existingParser() calls this.customParsers.has(contentType) using the raw string, but parsers are stored at line 85 with the normalized key from new ContentType(contentType).toString(). The check should use the normalized key ct instead of contentType."
+    },
+    "reasoning_forcing_score": 5,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 3,
+      "languages_required": 1,
+      "reasoning_steps": 6,
+      "context_depth": "cross_function",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "lib/content-type-parser.js"
+      ],
+      "files_must_read": [
+        "lib/content-type-parser.js",
+        "fastify.js",
+        "lib/symbols.js"
+      ],
+      "key_assertions": [
+        "customParsers\\.has\\(ct\\)|has\\(normalizedContentType\\)"
+      ],
+      "negative_assertions": [
+        "customParsers\\.delete|parsers\\.clear"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: duplicate parser registration is silently ignored",
+      "Open lib/content-type-parser.js and find the addContentTypeParser() function",
+      "Find existingParser() at line 105 — it checks this.customParsers.has(contentType)",
+      "Find where parsers are stored: line 85 uses this.customParsers.set(normalizedContentType, parser)",
+      "Realize: contentType (raw) !== normalizedContentType — has() check uses wrong key",
+      "Trace: normalized key is built via new ContentType(contentType).toString() in the ct variable at line 107",
+      "Apply fix: change has(contentType) to has(ct) in existingParser()"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.03,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

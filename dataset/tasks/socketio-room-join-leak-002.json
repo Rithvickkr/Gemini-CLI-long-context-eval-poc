@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "socketio-room-join-leak-002",
+  "repository": {
+    "url": "https://github.com/socketio/socket.io",
+    "commit": "e4d016bd5b4dba8646a53616fc8af1a257608c15",
+    "languages": ["TypeScript"],
+    "size_files": 180,
+    "size_lines": 22000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "packages/socket.io/lib/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "resource_leak",
+    "prompt": "When an async adapter like Redis is used and server-side code calls socket.join() while a disconnect is in progress, a permanent stale room entry is left in the adapter. The disconnect path runs leaveAll() and then sets socket.join to a noop — but if an async join was already in flight, the adapter's addAll() resolves after leaveAll() has already finished, adding the socket ID to the room after the cleanup is complete. No subsequent cleanup removes it. The socket ID persists in the adapter room map indefinitely, causing every subsequent broadcast to that room to attempt delivery to a ghost socket. Investigate the timing of socket.join() relative to the disconnect cleanup sequence and add the missing guard.",
+    "hint_levels": {
+      "symptom_only": "With cluster adapters like Redis, broadcast groups gradually accumulate stale connection IDs over time. Broadcasts to those groups generate delivery errors for connections that no longer exist. Memory usage in the adapter grows unboundedly. The leak only occurs when a client disconnects while a group-join operation is in progress.",
+      "file_hint": "The bug is in packages/socket.io/lib/socket.ts in the join() method at lines 700-714. It has no check for whether the socket is still connected before calling adapter.addAll(). The _cleanup() method sets this.join = noop at the end, but an async addAll() can resolve and write to the adapter after _cleanup() has already run.",
+      "function_hint": "In socket.ts join() at lines 700-714, there is no this.connected check. In _cleanup() at lines 900-910, leaveAll() runs first, then this.join = noop last. For async adapters, addAll() from a prior join() call can complete after leaveAll() but before or after the noop assignment. Add if (!this.connected) return as the first line of join()."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/socket.io/lib/socket.ts"
+      ],
+      "files_must_read": [
+        "packages/socket.io/lib/socket.ts",
+        "packages/socket.io/lib/namespace.ts",
+        "packages/socket.io/lib/client.ts",
+        "packages/socket.io/lib/broadcast-operator.ts"
+      ],
+      "key_assertions": [
+        "this\\.connected.*return|connected.*join|!.*connected"
+      ],
+      "negative_assertions": [
+        "adapter.*clear|rooms.*delete.*all"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: stale socket IDs accumulate in adapter rooms after disconnects, causing ghost broadcast attempts",
+      "Open socket.ts and find the join() method at lines 700-714",
+      "Confirm join() has no this.connected check — immediately calls adapter.addAll()",
+      "Find _cleanup() at lines 900-910 — leaveAll() runs first, this.join = noop runs last",
+      "Realize: async adapter.addAll() from a prior join() can resolve after leaveAll() completes",
+      "Open namespace.ts and find _remove() — confirms socket is removed from namespace before join=noop",
+      "Open client.ts and find onclose() — shows rapid disconnect makes this race reproducible",
+      "Open broadcast-operator.ts to understand consequences — stale room entries trigger delivery errors on every broadcast",
+      "Apply fix: add if (!this.connected) return as first line of join() in socket.ts"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}

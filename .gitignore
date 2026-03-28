@@ -1,0 +1,7 @@
+node_modules/
+dist/
+evals/logs/results/
+evals/logs/*.jsonl
+evals/logs/*.log
+*.draft.json
+.env

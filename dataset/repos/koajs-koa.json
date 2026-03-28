@@ -1,0 +1,19 @@
+{
+  "repo_id": "koajs-koa",
+  "url": "https://github.com/koajs/koa",
+  "commit": "e0ba8ef39d27fe5dae5492f9fe753d155124f994",
+  "languages": ["JavaScript"],
+  "size_files": 12,
+  "size_lines": 3500,
+  "license": "MIT",
+  "description": "Expressive middleware framework for Node.js using async functions, with composable middleware stack and context object",
+  "stars": 35000,
+  "sparse_checkout_paths": [
+    "lib/"
+  ],
+  "task_ids": [
+    "koa-origin-proxy-001",
+    "koa-onerror-race-002"
+  ],
+  "verified_at": "2026-03-28"
+}

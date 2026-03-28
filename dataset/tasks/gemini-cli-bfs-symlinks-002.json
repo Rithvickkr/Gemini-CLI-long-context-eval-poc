@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gemini-cli-bfs-symlinks-002",
+  "repository": {
+    "url": "https://github.com/google-gemini/gemini-cli",
+    "commit": "104587bae8326e7ad1e2d739b7e14c7665e10b2b",
+    "languages": ["TypeScript"],
+    "size_files": 76189,
+    "size_lines": 150000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "packages/core/src/utils/",
+      "packages/core/src/services/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "resource_leak",
+    "prompt": "When Gemini CLI encounters a codebase with symbolic links that point to directories through different paths, the file search traverses the same directory contents multiple times, causing excessive memory usage and slow performance. The BFS file search has a visited set but it only tracks path strings, not filesystem identity. A project with symlinks like /app/lib -> /shared/lib and /app/vendor/lib -> /shared/lib would traverse /shared/lib twice. Investigate the file traversal and fix the duplicate directory processing.",
+    "hint_levels": {
+      "symptom_only": "File search is slow and uses excessive memory in projects with symbolic links. The same directory contents appear to be traversed multiple times.",
+      "file_hint": "The bug is in packages/core/src/utils/bfsFileSearch.ts. Compare how it tracks visited directories versus how memoryDiscovery.ts deduplicates paths using inode identity.",
+      "function_hint": "In processDirEntries() at line 179, entry.isDirectory() is checked but entry.isSymbolicLink() is never called. The visited Set tracks path strings (line 44) but symlinks to the same directory via different paths bypass this check. Compare with memoryDiscovery.ts line 83 which uses stat() for inode-based deduplication."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_file",
+      "domain_knowledge": "architecture_level",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/core/src/utils/bfsFileSearch.ts"
+      ],
+      "files_must_read": [
+        "packages/core/src/utils/bfsFileSearch.ts",
+        "packages/core/src/utils/memoryDiscovery.ts",
+        "packages/core/src/utils/getFolderStructure.ts",
+        "packages/core/src/utils/paths.ts"
+      ],
+      "key_assertions": [
+        "isSymbolicLink",
+        "stat",
+        "ino",
+        "realpath"
+      ],
+      "negative_assertions": [
+        "readdir.*recursive"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: duplicate directory traversal with symlinks causing slow performance",
+      "Open bfsFileSearch.ts and find the BFS traversal implementation",
+      "Find processDirEntries() helper at line 169 — it calls entry.isDirectory() but never checks entry.isSymbolicLink()",
+      "Find the visited Set at line 44 — it tracks path strings, not filesystem identity",
+      "Realize symlinks to the same directory via different paths produce different strings, bypassing visited check",
+      "Open memoryDiscovery.ts and find deduplicatePathsByFileIdentity() — it uses stat() with (dev, ino) pairs at line 84",
+      "Open paths.ts and find robustRealpath() at line 378 — it uses lstat() and readlinkSync() for symlink resolution",
+      "Apply fix: resolve real paths via realpath/stat before adding to visited set, or check isSymbolicLink() and resolve target"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-15",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": null,
+    "cleanup": "delete_workspace"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "long-context-eval-poc",
+  "version": "0.1.0",
+  "description": "POC: Long-Context & Complex Reasoning Coding Eval Dataset for Gemini CLI",
+  "type": "module",
+  "scripts": {
+    "validate": "tsx scripts/validate.ts",
+    "validate:verbose": "tsx scripts/validate.ts --verbose",
+    "formulate": "tsx scripts/formulate.ts",
+    "contamination": "tsx scripts/detect-contamination.ts",
+    "eval": "vitest run --config evals/vitest.config.ts",
+    "analyze": "tsx scripts/analyze-results.ts",
+    "analyze:json": "tsx scripts/analyze-results.ts --format json",
+    "eval:live": "RUN_EVALS=1 vitest run --config evals/vitest.config.ts",
+    "leaderboard": "tsx scripts/leaderboard.ts",
+    "benchmark": "tsx scripts/benchmark-runner.ts",
+    "benchmark:dry": "tsx scripts/benchmark-runner.ts --dry-run",
+    "stats": "tsx evals/long-context/task-loader.ts",
+    "demo": "npm run validate && npm run contamination && npm run stats && npm run analyze && npm run leaderboard"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "author": "Rithvick Kumar (GSoC 2026)",
+  "license": "Apache-2.0"
+}

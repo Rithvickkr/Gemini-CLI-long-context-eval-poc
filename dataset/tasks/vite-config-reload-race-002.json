@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "vite-config-reload-race-002",
+  "repository": {
+    "url": "https://github.com/vitejs/vite",
+    "commit": "f516f2ee570f9abe27c8b01ee05b6f0dc0c7dc5e",
+    "languages": ["TypeScript"],
+    "size_files": 3800,
+    "size_lines": 180000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "packages/vite/src/node/server/",
+      "packages/vite/src/node/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "race_condition",
+    "prompt": "When vite.config.ts is saved while the dev server is already processing a config reload from a previous save, the server can end up in an inconsistent state. Two concurrent config reloads race against each other — the first reload starts shutting down plugins, and the second reload begins initializing before the first completes teardown. This causes plugin hooks to fire in wrong order or be called on already-disposed instances. Investigate and fix the config reload race condition.",
+    "hint_levels": {
+      "symptom_only": "Rapidly saving vite.config.ts multiple times causes the dev server to crash or enter a broken state where plugins misbehave. The issue only occurs when config changes are made faster than the reload completes.",
+      "file_hint": "The bug is in packages/vite/src/node/server/index.ts in the config file watcher handler. When a config change triggers a server restart, a second change arriving before restart completes causes two concurrent restartServer() calls. There is no debounce or mutex.",
+      "function_hint": "In server/index.ts, the watcher callback calls restartServer() without checking if a restart is already in progress. restartServer() calls server.close() then creates a new server instance — if called twice concurrently, the second call closes the server the first just created."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "packages/vite/src/node/server/index.ts"
+      ],
+      "files_must_read": [
+        "packages/vite/src/node/server/index.ts",
+        "packages/vite/src/node/config.ts",
+        "packages/vite/src/node/server/middlewares/proxy.ts",
+        "packages/vite/src/node/plugin.ts"
+      ],
+      "key_assertions": [
+        "isRestarting|restartPending|restarting|mutex|debounce|lock"
+      ],
+      "negative_assertions": [
+        "disable.*watch|ignore.*config"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: rapid config saves cause server crash — classic concurrent restart problem",
+      "Open server/index.ts and find the config file watcher handler",
+      "Find restartServer() function — trace what it does: close server, re-read config, init new server",
+      "Find that there is no guard preventing concurrent restartServer() calls",
+      "Open config.ts to understand loadConfigFromFile() — it's async and not idempotent",
+      "Open plugin.ts to see how plugins are torn down and re-initialized",
+      "Open proxy.ts to confirm proxy connections can leak if close() is called twice",
+      "Trace: second call to restartServer() closes the server created by first call",
+      "Apply fix: add isRestarting flag or debounce to prevent concurrent restarts"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-02-15",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.06,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "cleanup": "delete_workspace"
+  }
+}
