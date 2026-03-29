@@ -66,6 +66,12 @@
       "contamination_score": 0.05,
       "obfuscation_applied": false
     },
+    "gold_patch": "--- a/context.go\n+++ b/context.go\n@@ -122,8 +122,9 @@ func (c *Context) Copy() *Context {\n \tcp := *c\n \tcp.writermem.ResponseWriter = nil\n \tcp.Writer = &cp.writermem\n-\tcKeys := c.Keys\n \tc.mu.RLock()\n+\tcKeys := c.Keys\n \tcp.Keys = maps.Clone(cKeys)\n \tc.mu.RUnlock()\n \tcp.index = abortIndex",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 22000,
+      "total_context_tokens": 55000,
+      "pressure_pct": 5.5
+    },
     "test_oracle": null
   },
   "eval_config": {

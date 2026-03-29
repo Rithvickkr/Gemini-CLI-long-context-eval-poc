@@ -1,0 +1,20 @@
+{
+  "repo_id": "spring-projects-spring-boot",
+  "url": "https://github.com/spring-projects/spring-boot",
+  "commit": "b57fe6b4c15f8c01ab9528be65b0a36b2a2af4dc",
+  "languages": ["Java"],
+  "size_files": 8200,
+  "size_lines": 680000,
+  "license": "Apache-2.0",
+  "description": "Spring Boot — convention-over-configuration Java application framework used in millions of enterprise services worldwide",
+  "stars": 75000,
+  "sparse_checkout_paths": [
+    "spring-boot-project/spring-boot/src/",
+    "spring-boot-project/spring-boot-autoconfigure/src/",
+    "spring-boot-project/spring-boot-test/src/"
+  ],
+  "task_ids": [
+    "spring-boot-transactional-proxy-silent-001"
+  ],
+  "verified_at": "2026-03-30"
+}

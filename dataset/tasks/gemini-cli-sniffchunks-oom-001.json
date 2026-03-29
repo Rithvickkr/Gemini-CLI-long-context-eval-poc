@@ -65,6 +65,12 @@
       "training_cutoff_risk": "low",
       "contamination_score": 0.05,
       "obfuscation_applied": false
+    },
+    "gold_patch": "--- a/packages/core/src/services/shellExecutionService.ts\n+++ b/packages/core/src/services/shellExecutionService.ts\n@@ -566,7 +566,10 @@ async function childProcessFallback(\n       if (isStreamingRawContent && sniffedBytes < MAX_SNIFF_SIZE) {\n         sniffedBytes += data.length;\n-        state.sniffChunks.push(data);\n+        if (state.sniffChunks.length < 512) {\n+          state.sniffChunks.push(data);\n+        }\n       }\n@@ -1000,7 +1003,10 @@ async function executeWithPty(\n       if (isStreamingRawContent && sniffedBytes < MAX_SNIFF_SIZE) {\n         sniffedBytes += chunk.length;\n-        state.sniffChunks.push(chunk);\n+        if (state.sniffChunks.length < 512) {\n+          state.sniffChunks.push(chunk);\n+        }\n       }",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 12000,
+      "total_context_tokens": 28000,
+      "pressure_pct": 2.8
     }
   },
   "eval_config": {

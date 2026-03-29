@@ -1,0 +1,19 @@
+{
+  "repo_id": "tokio-rs-tokio",
+  "url": "https://github.com/tokio-rs/tokio",
+  "commit": "3f5a57ae9e4e42b540c26e17e2c89f8e67c36e0f",
+  "languages": ["Rust"],
+  "size_files": 950,
+  "size_lines": 95000,
+  "license": "MIT",
+  "description": "Tokio — event-driven, non-blocking I/O platform for writing asynchronous Rust applications",
+  "stars": 28000,
+  "sparse_checkout_paths": [
+    "tokio/src/",
+    "tokio/tests/"
+  ],
+  "task_ids": [
+    "tokio-spawn-drop-cancel-silent-001"
+  ],
+  "verified_at": "2026-03-30"
+}

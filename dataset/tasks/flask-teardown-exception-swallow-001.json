@@ -70,6 +70,12 @@
       "training_cutoff_risk": "low",
       "contamination_score": 0.05,
       "obfuscation_applied": false
+    },
+    "gold_patch": "--- a/src/flask/app.py\n+++ b/src/flask/app.py\n@@ -948,6 +948,7 @@ def do_teardown_request(self, exc=_sentinel):\n         for func in reversed(self.teardown_request_funcs[None]):\n             try:\n                 func(exc)\n             except Exception as e:\n                 self.logger.exception(\"Exception in teardown_request handler\")\n+                exc = e\n--- a/src/flask/ctx.py\n+++ b/src/flask/ctx.py\n@@ -418,6 +418,7 @@ def pop(self, exc=_sentinel):\n         for func in reversed(app_ctx.teardown_appcontext_funcs):\n             try:\n                 func(exc)\n             except Exception as e:\n                 app.logger.exception(\"Exception in teardown_appcontext handler\")\n+                exc = e",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 31000,
+      "total_context_tokens": 68000,
+      "pressure_pct": 6.8
     }
   },
   "eval_config": {

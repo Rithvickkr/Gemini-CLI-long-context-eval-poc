@@ -69,6 +69,12 @@
       "contamination_score": 0.06,
       "obfuscation_applied": false
     },
+    "gold_patch": "--- a/packages/vite/src/node/server/moduleGraph.ts\n+++ b/packages/vite/src/node/server/moduleGraph.ts\n@@ -187,6 +187,12 @@ export class ModuleGraph {\n   invalidateModule(mod: ModuleNode, seen = new Set<ModuleNode>()): void {\n     mod.info = undefined\n     mod.transformResult = null\n     mod.ssrTransformResult = null\n+    // Prune stale entries so the graph does not grow without bound\n+    if (mod.url) {\n+      this.urlToModuleMap.delete(mod.url)\n+    }\n+    if (mod.id) {\n+      this.idToModuleMap.delete(mod.id)\n+    }\n     mod.importers.forEach((importer) => {\n       if (!seen.has(importer)) {",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 48000,
+      "total_context_tokens": 145000,
+      "pressure_pct": 14.5
+    },
     "test_oracle": null
   },
   "eval_config": {

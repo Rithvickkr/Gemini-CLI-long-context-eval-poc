@@ -16,6 +16,8 @@
     "benchmark": "tsx scripts/benchmark-runner.ts",
     "benchmark:dry": "tsx scripts/benchmark-runner.ts --dry-run",
     "stats": "tsx evals/long-context/task-loader.ts",
+    "curate": "tsx scripts/curate.ts",
+    "curate:dry": "tsx scripts/curate.ts --dry-run",
     "demo": "npm run validate && npm run contamination && npm run stats && npm run analyze && npm run leaderboard"
   },
   "dependencies": {

@@ -1,0 +1,101 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "tokio-spawn-drop-cancel-silent-001",
+  "repository": {
+    "url": "https://github.com/tokio-rs/tokio",
+    "commit": "3f5a57ae9e4e42b540c26e17e2c89f8e67c36e0f",
+    "languages": ["Rust"],
+    "size_files": 950,
+    "size_lines": 95000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "tokio/src/",
+      "tokio/tests/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "A Tokio application spawns a background task to flush audit logs to a database. The spawned task is assigned to a variable `_handle`. Because the variable is prefixed with an underscore, the developer believes it is intentionally ignored, but the task is actually completing correctly in staging. In production — where request load causes the async runtime to be shut down before some requests fully complete — the `JoinHandle` is dropped at the end of its enclosing scope, which signals cancellation to the spawned task. The audit task is interrupted mid-write without any error, log, or panic. Critical audit records are silently lost. Investigate the relationship between `JoinHandle` lifetimes and task cancellation in Tokio, trace the cancellation signal path from `JoinHandle::drop` through the scheduler, and propose a fix that ensures the audit task always completes before the scope exits.",
+    "hint_levels": {
+      "symptom_only": "Audit log writes are being silently dropped under load in production. The issue is not observed in staging. No panics or error logs are produced. The audit task appears to complete correctly in isolation but is interrupted when the application is under load.",
+      "file_hint": "The bug is in the relationship between JoinHandle and task cancellation. In tokio/src/task/join_handle.rs, dropping a JoinHandle does NOT cancel the task by default — but in tokio/src/runtime/task/mod.rs, the task's reference counting means if the JoinHandle is the only owner reference and it is dropped, the task is detached but continues running. However, if the runtime shuts down (tokio/src/runtime/mod.rs shutdown()) before the task completes, all remaining tasks are cancelled. The root cause is not awaiting the handle before scope exit.",
+      "function_hint": "In tokio/src/task/join_handle.rs, JoinHandle::drop() calls self.inner.drop_join_handle_fast() or drop_join_handle_slow() depending on whether the task has completed. In tokio/src/runtime/mod.rs, Runtime::drop() calls self.inner.shutdown_timeout(). In tokio/src/runtime/task/mod.rs, shutdown() cancels all pending tasks via cancel_all_tasks(). The fix: await the JoinHandle before scope exit (tokio::join! or explicit .await), or use tokio::task::spawn and store the handle in a structure that awaits it on Drop."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_package",
+      "domain_knowledge": "architecture_level",
+      "overall": 5
+    },
+    "expected_changes": {
+      "files_modified": [
+        "tokio/src/task/join_handle.rs"
+      ],
+      "files_must_read": [
+        "tokio/src/task/join_handle.rs",
+        "tokio/src/runtime/mod.rs",
+        "tokio/src/runtime/task/mod.rs",
+        "tokio/src/runtime/scheduler/multi_thread/mod.rs",
+        "tokio/tests/task_cancel.rs"
+      ],
+      "key_assertions": [
+        "\\.await|join!|abort_handle|spawn_blocking"
+      ],
+      "negative_assertions": [
+        "drop.*handle|ignore.*JoinHandle"
+      ],
+      "assertion_type": "both"
+    },
+    "reasoning_chain": [
+      "Read symptom: audit log writes silently dropped under load, no panics",
+      "Identify that a JoinHandle stored as `_handle` is dropped when its enclosing scope ends",
+      "Open tokio/src/task/join_handle.rs — find JoinHandle::drop() — see it calls drop_join_handle_fast/slow",
+      "Understand that dropping the handle does not cancel the task itself, but detaches it",
+      "Open tokio/src/runtime/mod.rs — find Runtime::drop() calling shutdown_timeout()",
+      "Open tokio/src/runtime/task/mod.rs — find cancel_all_tasks() called during shutdown",
+      "Trace: if runtime drops before spawned task completes, the task receives a cancellation future drop",
+      "Open tokio/src/runtime/scheduler/multi_thread/mod.rs — confirm task future is dropped on shutdown",
+      "Apply fix: explicitly await the handle (.await) or use tokio::join! to ensure the audit task completes before the runtime is shut down"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-27",
+      "fix_merged": null,
+      "training_cutoff_risk": "medium",
+      "contamination_score": 0.12,
+      "obfuscation_applied": false
+    },
+    "gold_patch": "--- a/tokio/src/runtime/task/mod.rs\n+++ b/tokio/src/runtime/task/mod.rs\n@@ -1,5 +1,6 @@\n // Ensure spawned tasks that hold JoinHandles are awaited before scope exits.\n // Previously _handle was dropped without .await, silently cancelling the task\n // when the runtime shut down. The fix ensures the task is driven to completion.\n+// See: https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html\n \n-    let _handle = tokio::spawn(audit_flush(records));\n+    let handle = tokio::spawn(audit_flush(records));\n+    handle.await.expect(\"audit flush task panicked\");",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 38000,
+      "total_context_tokens": 120000,
+      "pressure_pct": 12.0
+    },
+    "test_oracle": {
+      "test_command": "cargo test -p tokio --test task_cancel -- --nocapture 2>&1",
+      "fail_to_pass": [
+        "task_cancel::join_handle_drop_does_not_cancel_before_scope_exit",
+        "task_cancel::audit_task_completes_before_runtime_shutdown"
+      ],
+      "pass_to_pass": [
+        "task_cancel::spawn_basic",
+        "task_cancel::join_handle_await_completes"
+      ],
+      "weak_test_ids": [
+        "task_cancel::spawn_basic"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 420000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}

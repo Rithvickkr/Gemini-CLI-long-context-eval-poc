@@ -244,6 +244,31 @@
               "default": false
             }
           }
+        },
+        "gold_patch": {
+          "type": "string",
+          "description": "The canonical correct fix as a unified diff (--- a/file +++ b/file format). Used for patch-similarity scoring and human review. Not shown to the model."
+        },
+        "token_budget_estimate": {
+          "type": "object",
+          "required": ["files_must_read_tokens", "total_context_tokens"],
+          "properties": {
+            "files_must_read_tokens": {
+              "type": "integer",
+              "description": "Approximate tokens in files_must_read combined (tiktoken cl100k_base)"
+            },
+            "total_context_tokens": {
+              "type": "integer",
+              "description": "Estimated total tokens for full context window (repo sparse checkout)"
+            },
+            "pressure_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "total_context_tokens / 1_000_000 (Gemini 1M context window) * 100"
+            }
+          },
+          "description": "Token budget estimation for context window pressure calibration"
         }
       }
     },

@@ -68,6 +68,12 @@
       "contamination_score": 0.03,
       "obfuscation_applied": false
     },
+    "gold_patch": "--- a/packages/core/injector/injector.ts\n+++ b/packages/core/injector/injector.ts\n@@ -1010,7 +1010,7 @@ export class Injector {\n   private getEffectiveInquirer(\n     wrapper: InstanceWrapper,\n     parentInquirer: InstanceWrapper | undefined,\n     contextId: ContextId,\n   ): InstanceWrapper | undefined {\n-    if (contextId !== STATIC_CONTEXT && parentInquirer) {\n+    if (parentInquirer) {\n       return parentInquirer;\n     }\n     return wrapper;",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 35000,
+      "total_context_tokens": 98000,
+      "pressure_pct": 9.8
+    },
     "test_oracle": null
   },
   "eval_config": {
