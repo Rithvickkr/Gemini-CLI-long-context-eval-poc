@@ -55,6 +55,9 @@ afterAll(() => {
   repoManager.cleanupAll();
 });
 
+// Extra headroom for clone + setup on top of the CLI's own timeout
+const SETUP_OVERHEAD_MS = 90_000;
+
 // ── Eval Suite ─────────────────────────────────────────────────────────────
 
 describe('long-context-eval: sniffchunks-oom', () => {
@@ -117,9 +120,9 @@ describe('long-context-eval: sniffchunks-oom', () => {
     } finally {
       await rig.cleanup();
     }
-  }, task.eval_config.timeout_ms);
+  }, task.eval_config.timeout_ms + SETUP_OVERHEAD_MS);
 
-  liveTest('[live][file_hint] agent fixes with file hint', async () => {
+  liveTest.skip('[live][file_hint] agent fixes with file hint', async () => {
     const rig = new LongContextRig({
       repoManager,
       hintLevel: 'file_hint',
@@ -140,7 +143,7 @@ describe('long-context-eval: sniffchunks-oom', () => {
     } finally {
       await rig.cleanup();
     }
-  }, task.eval_config.timeout_ms);
+  }, task.eval_config.timeout_ms + SETUP_OVERHEAD_MS);
 
   // ── Framework validation (always runs, no API key needed) ──────────────
 

@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gin-context-copy-race-001",
+  "repository": {
+    "url": "https://github.com/gin-gonic/gin",
+    "commit": "d3ffc9985281dcf4d3bef604cce4e662b1a327a6",
+    "languages": ["Go"],
+    "size_files": 120,
+    "size_lines": 18000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "."
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "race_condition",
+    "prompt": "The Context.Copy() method in Gin has a data race. It reads c.Keys into a local variable before acquiring the read lock, but another goroutine calling c.Set() may reassign c.Keys from nil to a new map at the same time. The unsynchronized read of c.Keys races with the write in Set(), causing maps.Clone() to operate on a stale or partially-initialized map pointer. This can produce silent data corruption or a panic under concurrent access. Investigate the mutex ordering in Copy() relative to Set() and fix the synchronization.",
+    "hint_levels": {
+      "symptom_only": "Under high concurrency, calling Copy() on a gin.Context while another goroutine calls Set() causes intermittent panics or silently returns a Context with missing keys. The race detector flags a concurrent read/write on the keys map field.",
+      "file_hint": "The bug is in context.go in the Copy() method at lines 125-128. The line cKeys := c.Keys reads the field before c.mu.RLock() is called on the next line. Compare with Set() at lines 453-461 which holds the write lock while potentially reassigning c.Keys from nil to a new map.",
+      "function_hint": "In context.go Copy() at line 125, cKeys := c.Keys reads the field outside the lock. At line 126, c.mu.RLock() acquires the lock too late. In Set() at line 457, c.Keys = make(map[any]any) writes the field under the write lock. The fix is to move the read of c.Keys inside the RLock/RUnlock block so maps.Clone operates on a consistent snapshot."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_function",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "context.go"
+      ],
+      "files_must_read": [
+        "context.go",
+        "gin.go",
+        "routergroup.go",
+        "recovery.go"
+      ],
+      "key_assertions": [
+        "RLock.*Keys|mu\\.RLock.*Clone|Lock.*before.*Keys"
+      ],
+      "negative_assertions": [
+        "remove.*mutex|delete.*RLock"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: data race between Copy() and Set() on Context.Keys",
+      "Open context.go and find Copy() method at lines 111-130",
+      "Notice line 125: cKeys := c.Keys reads the field BEFORE c.mu.RLock() on line 126",
+      "Find Set() method at lines 453-461 — acquires write lock and may assign c.Keys = make(map[any]any) if nil",
+      "Open gin.go and find ServeHTTP — reset() sets c.Keys = nil, then handlers run and call Set()",
+      "Realize: concurrent Copy() reads c.Keys outside lock while Set() writes it under lock — textbook race",
+      "Open routergroup.go to confirm middleware can call Set/Get concurrently",
+      "Apply fix: move cKeys := c.Keys inside the c.mu.RLock()/c.mu.RUnlock() block"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    },
+    "test_oracle": null
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "semantic_correctness": "manual_review_required",
+    "cleanup": "delete_workspace"
+  }
+}

@@ -72,6 +72,7 @@
     "timeout_ms": 300000,
     "policy": "USUALLY_PASSES",
     "setup": "sparse_clone",
+    "semantic_correctness": "manual_review_required",
     "cleanup": "delete_workspace"
   }
 }

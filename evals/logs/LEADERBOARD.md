@@ -1,32 +1,33 @@
 # Long-Context Eval Leaderboard
 
-> Generated: 2026-03-28 | Tasks: 10 | Repos: 2
+> Generated: 2026-03-29 | Tasks: 28 | Repos: 11
 
 ## Overall Ranking
 
 | Rank | Model | Pass Rate | PES | Tasks | Avg Time |
 |------|-------|-----------|-----|-------|----------|
-| 🥇 | `gemini-2.5-pro` | **80%** | 0.64 | 8/10 | 82.3s |
-| 🥈 | `gemini-2.5-flash` | **80%** | 0.65 | 8/10 | 69.7s |
-| 🥉 | `gemini-2.0-flash` | **50%** | 0.5 | 5/10 | 73.0s |
+| 🥇 | `gemini-2.5-pro` | **78.6%** | 0.57 | 22/28 | 80.6s |
+| 🥈 | `gemini-2.5-flash` | **67.9%** | 0.57 | 19/28 | 82.8s |
+| 🥉 | `gemini-2.0-flash` | **39.3%** | 0.59 | 11/28 | 83.5s |
 
 ## Pass Rate by Category
 
 | Category | `gemini-2.5-pro` | `gemini-2.5-flash` | `gemini-2.0-flash` | |
 |---|---|---|---||
-| `cross_component_bug` | 50% | 50% | 0% |
-| `race_condition` | 67% | 100% | 67% |
-| `resource_leak` | 100% | 100% | 67% |
-| `silent_failure` | 100% | 0% | 0% |
-| `unbounded_growth` | 100% | 100% | 100% |
+| `cross_component_bug` | 80% | 80% | 40% |
+| `error_recovery` | 100% | 100% | 100% |
+| `race_condition` | 83% | 33% | 33% |
+| `resource_leak` | 80% | 80% | 20% |
+| `silent_failure` | 70% | 80% | 40% |
+| `unbounded_growth` | 100% | 0% | 100% |
 
 ## Pass Rate by Difficulty (1=Easy, 5=Hard)
 
 | Difficulty | `gemini-2.5-pro` | `gemini-2.5-flash` | `gemini-2.0-flash` | |
 |---|---|---|---||
-| Level 3 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
-| Level 4 | 75% (6/8) | 75% (6/8) | 38% (3/8) |
-| Level 5 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
+| Level 3 | 86% (6/7) | 71% (5/7) | 71% (5/7) |
+| Level 4 | 76% (13/17) | 76% (13/17) | 35% (6/17) |
+| Level 5 | 75% (3/4) | 25% (1/4) | 0% (0/4) |
 
 ## Navigation Efficiency (PES)
 
@@ -34,9 +35,9 @@
 
 | Model | Avg PES | Interpretation |
 |-------|---------|----------------|
-| `gemini-2.5-pro` | 0.64 | Good — minimal distraction |
-| `gemini-2.5-flash` | 0.65 | Good — minimal distraction |
-| `gemini-2.0-flash` | 0.5 | Good — minimal distraction |
+| `gemini-2.5-pro` | 0.57 | Good — minimal distraction |
+| `gemini-2.5-flash` | 0.57 | Good — minimal distraction |
+| `gemini-2.0-flash` | 0.59 | Good — minimal distraction |
 
 ---
 

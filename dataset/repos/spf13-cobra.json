@@ -1,0 +1,19 @@
+{
+  "repo_id": "spf13-cobra",
+  "url": "https://github.com/spf13/cobra",
+  "commit": "0f1d3f6bc0dba8c2e178f5ee0d7e7cdbb7c113ce",
+  "languages": ["Go"],
+  "size_files": 95,
+  "size_lines": 24000,
+  "license": "Apache-2.0",
+  "description": "A Commander for modern Go CLI interactions — command hierarchy, persistent flags, shell completions, and help generation",
+  "stars": 38000,
+  "sparse_checkout_paths": [
+    "."
+  ],
+  "task_ids": [
+    "cobra-persistent-flag-shadow-001",
+    "cobra-completion-noflag-panic-002"
+  ],
+  "verified_at": "2026-03-29"
+}

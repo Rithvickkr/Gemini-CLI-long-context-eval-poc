@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "flask-blueprint-url-prefix-merge-002",
+  "repository": {
+    "url": "https://github.com/pallets/flask",
+    "commit": "a31dc3895754604f5ef23b19c46c4adae6d47958",
+    "languages": ["Python"],
+    "size_files": 312,
+    "size_lines": 38000,
+    "license": "BSD-3-Clause",
+    "sparse_checkout_paths": [
+      "src/flask/",
+      "tests/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "cross_component_bug",
+    "prompt": "When using nested Flask blueprints, the URL prefix composition is incorrect. A parent blueprint registered with url_prefix='/api' contains a child blueprint with url_prefix='/v2'. The child blueprint has a route '/users'. The expected URL is '/api/v2/users', but under certain registration orders — specifically when the child blueprint is registered to the parent before the parent is registered to the app — the parent's prefix is silently dropped, producing '/v2/users'. The issue does not manifest when blueprints are registered in the reverse order. Investigate the blueprint registration lifecycle and fix the prefix composition for nested blueprints.",
+    "hint_levels": {
+      "symptom_only": "Nested blueprint URL prefixes are silently dropped depending on registration order. Registering a child blueprint to a parent before the parent is registered to the app causes the parent's url_prefix to be lost in the composed URL.",
+      "file_hint": "The bug is in src/flask/blueprints.py in the Blueprint.register() method and src/flask/scaffold.py in the _merge_blueprint_state() helper. When a child is registered to a parent that hasn't been registered to an app yet, the deferred registration list doesn't capture the parent's prefix.",
+      "function_hint": "In src/flask/blueprints.py register() around line 270, the method iterates self._blueprints (children) and calls child.register(app, ...) with the merged options. But the state.url_prefix used in _merge_blueprint_state() at line 310 reads from self.url_prefix which is the creation-time prefix, not the registration-time prefix from the options dict. When register_blueprint() is called on the parent with a different url_prefix, the mismatch causes the parent prefix to be lost for already-queued children."
+    },
+    "reasoning_forcing_score": 9,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "src/flask/blueprints.py",
+        "src/flask/scaffold.py"
+      ],
+      "files_must_read": [
+        "src/flask/blueprints.py",
+        "src/flask/scaffold.py",
+        "src/flask/app.py",
+        "tests/test_blueprints.py",
+        "src/flask/helpers.py"
+      ],
+      "key_assertions": [
+        "url_prefix",
+        "merge|concat|join",
+        "register"
+      ],
+      "negative_assertions": [
+        "remove.*blueprint|disable.*nest"
+      ],
+      "assertion_type": "both"
+    },
+    "reasoning_chain": [
+      "Read the symptom: nested blueprint prefixes dropped when parent isn't registered to app yet",
+      "Open src/flask/blueprints.py and find Blueprint.register() — trace how child blueprints are iterated",
+      "Find that register() calls child.register(app, options) for each child in self._blueprints",
+      "Trace _merge_blueprint_state() in src/flask/scaffold.py — see that it reads self.url_prefix (creation-time)",
+      "Realize: when parent is registered with a DIFFERENT url_prefix via app.register_blueprint(parent, url_prefix='/api'), the creation-time prefix on the parent object is '/old', not '/api'",
+      "Open src/flask/app.py to see how register_blueprint passes options to blueprint.register()",
+      "Open tests/test_blueprints.py to see existing nested blueprint tests — no test for differing creation-time vs registration-time prefixes",
+      "Understand the fix: _merge_blueprint_state must use the registration-time prefix from options, not self.url_prefix",
+      "Apply fix: pass the effective parent prefix through to child registration, use options['url_prefix'] in _merge_blueprint_state"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-26",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": {
+      "test_command": "python -m pytest tests/test_blueprints.py -x",
+      "fail_to_pass": [
+        "test_nested_blueprint_url_prefix_registration_order",
+        "test_nested_blueprint_prefix_composition_deferred"
+      ],
+      "pass_to_pass": [
+        "test_blueprint_url_prefix",
+        "test_nested_blueprint"
+      ],
+      "weak_test_ids": [
+        "test_blueprint_url_prefix"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    },
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}

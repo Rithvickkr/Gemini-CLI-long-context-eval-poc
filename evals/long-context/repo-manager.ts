@@ -59,8 +59,12 @@ export class RepoManager {
   private activeWorktrees: Set<string> = new Set();
 
   constructor(options: RepoManagerOptions = {}) {
-    this.cacheDir = options.cacheDir ?? path.join(os.tmpdir(), 'gemini-eval-repos');
-    this.worktreeBaseDir = options.worktreeBaseDir ?? path.join(os.tmpdir(), 'gemini-eval-worktrees');
+    // On Windows use short paths to avoid MAX_PATH (260 chars) hitting git worktree paths.
+    const isWin = process.platform === 'win32';
+    const shortBase = isWin ? 'C:\\evrepos' : path.join(os.tmpdir(), 'gemini-eval-repos');
+    const shortWt   = isWin ? 'C:\\evwt'    : path.join(os.tmpdir(), 'gemini-eval-worktrees');
+    this.cacheDir = options.cacheDir ?? shortBase;
+    this.worktreeBaseDir = options.worktreeBaseDir ?? shortWt;
     this.gitTimeout = options.gitTimeout ?? 120_000;
     this.verbose = options.verbose ?? false;
 
@@ -235,11 +239,16 @@ export class RepoManager {
   }
 
   private urlToSlug(url: string): string {
-    return url
+    // Keep slug SHORT to avoid Windows MAX_PATH (260 chars) in worktree paths.
+    // Extract just the repo name portion: last two path segments (owner/repo).
+    const clean = url
       .replace(/^https?:\/\//, '')
-      .replace(/\.git$/, '')
-      .replace(/[^a-z0-9]/gi, '-')
-      .toLowerCase();
+      .replace(/\.git$/, '');
+    const parts = clean.split('/');
+    // Use last segment (repo name) + first 4 chars of owner for uniqueness
+    const repo  = parts[parts.length - 1]  ?? 'repo';
+    const owner = (parts[parts.length - 2] ?? 'unk').slice(0, 4);
+    return `${owner}-${repo}`.replace(/[^a-z0-9-]/gi, '-').toLowerCase().slice(0, 24);
   }
 
   private getDirSizeMB(dir: string): number {

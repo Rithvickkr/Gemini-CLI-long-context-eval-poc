@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "cobra-persistent-flag-shadow-001",
+  "repository": {
+    "url": "https://github.com/spf13/cobra",
+    "commit": "0f1d3f6bc0dba8c2e178f5ee0d7e7cdbb7c113ce",
+    "languages": ["Go"],
+    "size_files": 95,
+    "size_lines": 24000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "."
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "In Cobra, a parent command defines a persistent flag --output with a default value of 'json'. A child command defines its own local flag also named --output. When the user invokes the child command with '--output=yaml', the child's local flag correctly receives 'yaml', but any code in RunE that reads the persistent flag via cmd.Root().PersistentFlags().GetString('output') still sees 'json' (the default). The local flag silently shadows the persistent flag without warning. Cobra does not detect or warn about this collision during AddCommand(). The user sees no error — the wrong value is silently used. Investigate the flag lookup precedence between local and persistent flags and fix the shadowing behavior.",
+    "hint_levels": {
+      "symptom_only": "A child command's local flag with the same name as a parent's persistent flag silently shadows it. Code that reads the persistent flag via the parent's PersistentFlags() sees the default value instead of the user-supplied value. No warning is produced.",
+      "file_hint": "The bug is in command.go in the mergePersistentFlags() method and flag handling in AddCommand(). The Flags().Lookup() and PersistentFlags().Lookup() methods don't cross-check for collisions when a local flag has the same name as an inherited persistent flag.",
+      "function_hint": "In command.go mergePersistentFlags() around line 1680, persistent flags from the parent are merged into the child's flag set. But if the child already has a local flag with the same name, pflag.FlagSet.AddFlag silently skips the duplicate (pflag line 83). In AddCommand() at line 1220, there is no collision check. The fix requires either detecting and warning about the collision in AddCommand(), or propagating the local flag value to the persistent flag during Execute()."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "command.go"
+      ],
+      "files_must_read": [
+        "command.go",
+        "cobra.go",
+        "command_test.go",
+        "args.go"
+      ],
+      "key_assertions": [
+        "shadow|collision|duplicate|warn",
+        "PersistentFlags|Flags",
+        "Lookup|AddFlag"
+      ],
+      "negative_assertions": [
+        "remove.*persistent|disable.*flag"
+      ],
+      "assertion_type": "both"
+    },
+    "reasoning_chain": [
+      "Read the symptom: local flag silently shadows persistent flag of the same name",
+      "Open command.go and find AddCommand() — no collision detection between child local flags and parent persistent flags",
+      "Find mergePersistentFlags() — see that parent persistent flags are merged into the child's effective flag set",
+      "Open pflag source or understand pflag.FlagSet.AddFlag behavior — silently skips duplicate names",
+      "Open cobra.go to understand the Flag() vs PersistentFlags() accessor distinction",
+      "Open command_test.go to see existing flag inheritance tests — no test for same-name collision",
+      "Apply fix: add collision detection in AddCommand() that warns or errors when a local flag name matches an inherited persistent flag"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-27",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": {
+      "test_command": "go test ./... -run",
+      "fail_to_pass": [
+        "TestPersistentFlagShadowDetection",
+        "TestPersistentFlagValuePropagation"
+      ],
+      "pass_to_pass": [
+        "TestPersistentFlags",
+        "TestFlagInheritance"
+      ],
+      "weak_test_ids": [
+        "TestPersistentFlags"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    },
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}

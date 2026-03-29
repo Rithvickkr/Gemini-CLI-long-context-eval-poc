@@ -288,11 +288,26 @@
                   "type": "array",
                   "items": { "type": "string" },
                   "description": "Test IDs that must continue to PASS after fix (regression guard)"
+                },
+                "weak_test_ids": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Deliberately weak tests that a shallow/incorrect fix would also pass. If the model's fix passes weak_test_ids but fails fail_to_pass, it caught a plausible-but-wrong patch (differential testing)."
+                },
+                "semantic_correctness": {
+                  "type": "string",
+                  "enum": ["test_sufficient", "test_necessary_not_sufficient", "manual_review_required"],
+                  "description": "Whether the test oracle alone is sufficient to verify the fix is semantically correct, or whether a fix could pass all tests but still be wrong."
                 }
               }
             }
           ],
-          "description": "SWE-bench compatible test oracle with fail_to_pass/pass_to_pass, or null"
+          "description": "SWE-bench compatible test oracle with fail_to_pass/pass_to_pass and optional differential testing via weak_test_ids, or null"
+        },
+        "semantic_correctness": {
+          "type": "string",
+          "enum": ["test_sufficient", "test_necessary_not_sufficient", "manual_review_required"],
+          "description": "Whether the eval oracle (test_oracle + key_assertions) is sufficient to verify the fix is semantically correct. 'test_sufficient' means passing all tests guarantees correctness. 'test_necessary_not_sufficient' means tests are needed but a fix could pass tests and still be wrong. 'manual_review_required' means no automated oracle can fully verify this fix."
         },
         "cleanup": {
           "type": "string",

@@ -90,8 +90,13 @@
         "should return true for git-ignored files",
         "should return false for non-ignored files",
         "should handle negation patterns"
-      ]
+      ],
+      "weak_test_ids": [
+        "should return true for git-ignored files"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
     },
+    "semantic_correctness": "test_necessary_not_sufficient",
     "cleanup": "delete_workspace"
   }
 }

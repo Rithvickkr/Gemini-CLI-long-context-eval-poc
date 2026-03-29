@@ -23,6 +23,7 @@ import { RepoManager, type RepoSpec, type WorktreeHandle } from './repo-manager.
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface TaskManifest {
+  schema_version: string;
   task_id: string;
   repository: RepoSpec & {
     languages: string[];
@@ -40,6 +41,13 @@ export interface TaskManifest {
       function_hint: string;
     };
     reasoning_forcing_score: number;
+    difficulty: {
+      overall: number;
+      reasoning_steps: number;
+      context_depth: string;
+      [key: string]: unknown;
+    };
+    reasoning_chain: string[];
     expected_changes: {
       files_modified: string[];
       files_must_read: string[];
@@ -51,12 +59,20 @@ export interface TaskManifest {
       fail_to_pass: string[];
       pass_to_pass: string[];
       test_command: string;
+      weak_test_ids?: string[];
+      semantic_correctness?: 'test_sufficient' | 'test_necessary_not_sufficient' | 'manual_review_required';
     } | null;
+    contamination_info: {
+      training_cutoff_risk: string;
+      contamination_score?: number;
+      [key: string]: unknown;
+    };
   };
   eval_config: {
     timeout_ms: number;
     policy: string;
     setup: string;
+    semantic_correctness?: string;
   };
 }
 
@@ -114,12 +130,14 @@ interface LongContextRigOptions {
 // ── Bundle path detection ──────────────────────────────────────────────────
 
 const BUNDLE_CANDIDATES = [
-  // Relative to this POC
+  // Environment override — checked FIRST so it wins
+  process.env['GEMINI_CLI_BUNDLE_PATH'] ?? '',
+  // Sibling directory layout (e.g., e:\GeminiCLI\gemini-cli\bundle\gemini.js)
+  path.resolve(__dirname, '../../../../../gemini-cli/bundle/gemini.js'),
+  // Relative to this POC at evals/long-context/ — go up 4 levels then into sibling
   path.resolve(__dirname, '../../../../gemini-cli/bundle/gemini.js'),
   // Relative to monorepo root
   path.resolve(__dirname, '../../../bundle/gemini.js'),
-  // Environment override
-  process.env['GEMINI_CLI_BUNDLE_PATH'] ?? '',
 ].filter(Boolean);
 
 function findBundle(override?: string): string {
@@ -235,7 +253,7 @@ export class LongContextRig {
     return new Promise((resolve) => {
       const env = this.getCleanEnv(options.homeDir, options.activityLogFile);
 
-      const child = spawn('node', [this.bundlePath, '--approval-mode=yolo', prompt], {
+      const child = spawn('node', [this.bundlePath, '--approval-mode=yolo', '-p', prompt], {
         cwd: options.cwd,
         stdio: 'pipe',
         env,
@@ -430,10 +448,34 @@ export class LongContextRig {
       });
     };
 
-    return {
+    const result: {
+      failToPass: { test: string; passed: boolean }[];
+      passToPass: { test: string; passed: boolean }[];
+      weakTestResults?: { test: string; passed: boolean }[];
+      differentialTestingVerdict?: 'correct_fix' | 'plausible_but_wrong' | 'inconclusive';
+    } = {
       failToPass: runTests(oracle.fail_to_pass),
       passToPass: runTests(oracle.pass_to_pass),
     };
+
+    // Differential testing: run weak tests to catch plausible-but-wrong patches.
+    // If the fix passes weak_test_ids but fails fail_to_pass, the model produced
+    // a shallow fix that satisfies weak tests but not the real ones.
+    if (oracle.weak_test_ids?.length) {
+      result.weakTestResults = runTests(oracle.weak_test_ids);
+      const allWeakPassed = result.weakTestResults.every((t) => t.passed);
+      const allStrongPassed = result.failToPass.every((t) => t.passed);
+
+      if (allWeakPassed && !allStrongPassed) {
+        result.differentialTestingVerdict = 'plausible_but_wrong';
+      } else if (allStrongPassed) {
+        result.differentialTestingVerdict = 'correct_fix';
+      } else {
+        result.differentialTestingVerdict = 'inconclusive';
+      }
+    }
+
+    return result;
   }
 
   // ── Failure Taxonomy (7 modes) ─────────────────────────────────────────
@@ -494,6 +536,22 @@ export class LongContextRig {
 
     // 7. Shallow fix — touched the right files but assertions don't pass
     return 'shallow_fix';
+  }
+
+  /**
+   * Determine if the run was successful.
+   * A run is successful if:
+   *   - All key assertions are found in the diff
+   *   - No negative assertions are found
+   *   - All fail_to_pass tests pass (if test oracle ran)
+   *   - All pass_to_pass tests still pass (if test oracle ran)
+   */
+  private isSuccess(assertions: RunResult['assertionResults']): boolean {
+    const keyPassed = assertions.keyAssertions.every((a) => a.found);
+    const noNegatives = assertions.negativeAssertions.every((a) => !a.found);
+    const failToPassOk = assertions.failToPass.length === 0 || assertions.failToPass.every((t) => t.passed);
+    const passToPassOk = assertions.passToPass.length === 0 || assertions.passToPass.every((t) => t.passed);
+    return keyPassed && noNegatives && failToPassOk && passToPassOk;
   }
 
   // ── Metrics ────────────────────────────────────────────────────────────

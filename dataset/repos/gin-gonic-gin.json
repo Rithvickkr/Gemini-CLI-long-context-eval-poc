@@ -1,0 +1,19 @@
+{
+  "repo_id": "gin-gonic-gin",
+  "url": "https://github.com/gin-gonic/gin",
+  "commit": "d3ffc9985281dcf4d3bef604cce4e662b1a327a6",
+  "languages": ["Go"],
+  "size_files": 120,
+  "size_lines": 18000,
+  "license": "MIT",
+  "description": "Gin is a HTTP web framework written in Go — high performance router, middleware, JSON validation, and error management",
+  "stars": 80000,
+  "sparse_checkout_paths": [
+    "."
+  ],
+  "task_ids": [
+    "gin-context-copy-race-001",
+    "gin-routergroup-basepath-slash-002"
+  ],
+  "verified_at": "2026-03-29"
+}

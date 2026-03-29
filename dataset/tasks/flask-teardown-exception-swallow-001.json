@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "flask-teardown-exception-swallow-001",
+  "repository": {
+    "url": "https://github.com/pallets/flask",
+    "commit": "a31dc3895754604f5ef23b19c46c4adae6d47958",
+    "languages": ["Python"],
+    "size_files": 312,
+    "size_lines": 38000,
+    "license": "BSD-3-Clause",
+    "sparse_checkout_paths": [
+      "src/flask/",
+      "tests/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "resource_leak",
+    "prompt": "Flask's teardown_request callbacks are supposed to receive the exception that caused the request to fail, if any. When multiple teardown functions are registered, each one receives the original exception via the `exc` argument. However, if one teardown function raises its own exception, the `exc` argument passed to subsequent teardown functions becomes stale — it still references the original exception, not the one raised by the previous teardown. This causes downstream teardowns to make incorrect cleanup decisions. For example, a database teardown might commit instead of rolling back because it sees no exception, even though a previous teardown failed. The bug is compounded by the fact that Flask silently logs and swallows teardown exceptions rather than propagating them, so the application developer never sees the cascading failure. Investigate the teardown callback dispatch and fix the exception propagation chain.",
+    "hint_levels": {
+      "symptom_only": "When a teardown_request callback raises an exception, subsequent teardown callbacks still receive the original request exception instead of the new one. This causes downstream teardowns to make incorrect cleanup decisions, such as committing a database transaction when they should roll back.",
+      "file_hint": "The bug is in src/flask/ctx.py in the RequestContext._pop() method and src/flask/app.py in the do_teardown_request() method. The exception variable is captured once before iterating over teardown functions and never updated when a teardown raises.",
+      "function_hint": "In src/flask/app.py do_teardown_request() around line 950, the variable `exc` is bound from `sys.exc_info()` before the for-loop over `self.teardown_request_funcs[None]`. When a teardown raises, the except block logs and continues, but `exc` is not reassigned to the new exception. In src/flask/ctx.py pop() at line 420, the same pattern occurs with `app_ctx.do_teardown_appcontext()`. Fix: update `exc` inside the except block before continuing to the next teardown."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 4
+    },
+    "expected_changes": {
+      "files_modified": [
+        "src/flask/app.py",
+        "src/flask/ctx.py"
+      ],
+      "files_must_read": [
+        "src/flask/app.py",
+        "src/flask/ctx.py",
+        "src/flask/globals.py",
+        "src/flask/signals.py",
+        "tests/test_teardown.py"
+      ],
+      "key_assertions": [
+        "exc\\s*=",
+        "teardown",
+        "except.*Exception"
+      ],
+      "negative_assertions": [
+        "remove.*teardown|disable.*teardown"
+      ],
+      "assertion_type": "both"
+    },
+    "reasoning_chain": [
+      "Read the symptom: teardown callbacks receive stale exception when a preceding teardown raises",
+      "Open src/flask/app.py and find do_teardown_request() — see that exc is captured once via sys.exc_info() before the loop",
+      "Trace the for-loop: each teardown_func(exc) is called with the same exc binding, even after an inner except catches a new error",
+      "Open src/flask/ctx.py and find RequestContext.pop() — same pattern in do_teardown_appcontext()",
+      "Open src/flask/globals.py to understand how _cv_request and _cv_app track the current context",
+      "Open tests/test_teardown.py to understand existing teardown test coverage — no test for chained exceptions",
+      "Realize the fix requires updating exc inside the except block: exc = e, so subsequent teardowns see the cascading failure",
+      "Apply fix in both do_teardown_request() and do_teardown_appcontext() — reassign exc in the except handler"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-25",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": {
+      "test_command": "python -m pytest tests/test_teardown.py -x",
+      "fail_to_pass": [
+        "test_chained_teardown_exception_propagation",
+        "test_teardown_exc_updated_on_failure"
+      ],
+      "pass_to_pass": [
+        "test_teardown_request_handler",
+        "test_teardown_request_handler_debug_mode"
+      ],
+      "weak_test_ids": [
+        "test_teardown_request_handler"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    },
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}

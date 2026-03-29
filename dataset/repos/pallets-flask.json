@@ -1,0 +1,20 @@
+{
+  "repo_id": "pallets-flask",
+  "url": "https://github.com/pallets/flask",
+  "commit": "a31dc3895754604f5ef23b19c46c4adae6d47958",
+  "languages": ["Python"],
+  "size_files": 312,
+  "size_lines": 38000,
+  "license": "BSD-3-Clause",
+  "description": "The Python micro framework for building web applications — routing, templates, sessions, blueprints, and extensions",
+  "stars": 69000,
+  "sparse_checkout_paths": [
+    "src/flask/",
+    "tests/"
+  ],
+  "task_ids": [
+    "flask-teardown-exception-swallow-001",
+    "flask-blueprint-url-prefix-merge-002"
+  ],
+  "verified_at": "2026-03-29"
+}

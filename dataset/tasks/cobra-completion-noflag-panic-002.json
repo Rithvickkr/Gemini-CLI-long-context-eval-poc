@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "cobra-completion-noflag-panic-002",
+  "repository": {
+    "url": "https://github.com/spf13/cobra",
+    "commit": "0f1d3f6bc0dba8c2e178f5ee0d7e7cdbb7c113ce",
+    "languages": ["Go"],
+    "size_files": 95,
+    "size_lines": 24000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "."
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "error_recovery",
+    "prompt": "Cobra's shell completion system panics with a nil pointer dereference when generating completions for a command that has flags with RegisterFlagCompletionFunc but no ValidArgsFunction set on the command itself. The panic occurs during bash/zsh/fish completion generation when the completion logic tries to call the command's ValidArgsFunction to get positional completions, finds it nil, and then tries to check completion directives on the nil return value. This only happens when the command has at least one flag with a custom completion function — if no flags have custom completions, the code path skips the nil ValidArgsFunction entirely. The crash is intermittent because it depends on whether the user has typed a flag prefix or a positional argument. Investigate the completion generation code path and add proper nil guards.",
+    "hint_levels": {
+      "symptom_only": "Shell completion (bash/zsh/fish) panics with a nil pointer dereference for commands that have flag completion functions registered via RegisterFlagCompletionFunc but no ValidArgsFunction. This only manifests when the user triggers positional argument completion, not flag name completion.",
+      "file_hint": "The bug is in completions.go in the getCompletions() function and custom_completions.go in the completeRequiredFlags() helper. The nil check for ValidArgsFunction is missing in the code path that handles mixed flag+positional completions.",
+      "function_hint": "In completions.go getCompletions() around line 430, the function checks `if c.ValidArgsFunction != nil` for the primary path, but around line 510 in the fallback path after flag completions are gathered, it calls `c.ValidArgsFunction(c, args, toComplete)` without a nil check. In custom_completions.go completeRequiredFlags() line 85, the function iterates flags with custom completions and assumes the parent command's ValidArgsFunction is non-nil for directive merging."
+    },
+    "reasoning_forcing_score": 6,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "completions.go",
+        "custom_completions.go"
+      ],
+      "files_must_read": [
+        "completions.go",
+        "custom_completions.go",
+        "command.go",
+        "completions_test.go"
+      ],
+      "key_assertions": [
+        "nil",
+        "ValidArgsFunction",
+        "RegisterFlagCompletionFunc|flagCompletion"
+      ],
+      "negative_assertions": [
+        "remove.*completion|disable.*flag"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read the symptom: nil pointer panic during shell completion when ValidArgsFunction is nil but flag completion functions exist",
+      "Open completions.go and find getCompletions() — trace the two code paths: primary (line 430) and fallback (line 510)",
+      "See that line 430 has `if c.ValidArgsFunction != nil` guard, but line 510 calls it unconditionally",
+      "Open custom_completions.go and find completeRequiredFlags() — another unguarded call to ValidArgsFunction for directive merging",
+      "Open command.go to confirm that ValidArgsFunction is a nullable field (not always set by users)",
+      "Open completions_test.go to see existing tests — no test for the case where RegisterFlagCompletionFunc is used without ValidArgsFunction",
+      "Apply fix: add nil guards at both call sites (completions.go line 510, custom_completions.go line 85) and return empty completions with ShellCompDirectiveNoFileComp when ValidArgsFunction is nil"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "test_oracle": null,
+    "semantic_correctness": "manual_review_required",
+    "cleanup": "delete_workspace"
+  }
+}

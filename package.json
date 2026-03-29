@@ -11,7 +11,7 @@
     "eval": "vitest run --config evals/vitest.config.ts",
     "analyze": "tsx scripts/analyze-results.ts",
     "analyze:json": "tsx scripts/analyze-results.ts --format json",
-    "eval:live": "RUN_EVALS=1 vitest run --config evals/vitest.config.ts",
+    "eval:live": "cross-env RUN_EVALS=1 vitest run --config evals/vitest.config.ts",
     "leaderboard": "tsx scripts/leaderboard.ts",
     "benchmark": "tsx scripts/benchmark-runner.ts",
     "benchmark:dry": "tsx scripts/benchmark-runner.ts --dry-run",
@@ -23,6 +23,8 @@
     "ajv-formats": "^3.0.1"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
+    "cross-env": "^10.1.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

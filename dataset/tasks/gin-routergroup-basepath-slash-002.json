@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "gin-routergroup-basepath-slash-002",
+  "repository": {
+    "url": "https://github.com/gin-gonic/gin",
+    "commit": "d3ffc9985281dcf4d3bef604cce4e662b1a327a6",
+    "languages": ["Go"],
+    "size_files": 120,
+    "size_lines": 18000,
+    "license": "MIT",
+    "sparse_checkout_paths": [
+      "."
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "Gin's RouterGroup.Group() uses an internal path-joining helper to construct the absolute path for a new sub-group. When a parent group already has a trailing slash — e.g., created via engine.Group(\"/api/\") — and a child route adds a relative path starting with \"/\", the join produces a double-slash path such as \"/api//users\". This double-slash is never normalised and is stored verbatim in the radix tree. At runtime the route is unreachable via a client request to \"/api/users\" because the trie lookup is exact-match on the stored key. However, gin.Default() does not warn about this, and the registered handler silently goes uncalled. Investigate how group base paths are joined and stored in the router trie, and fix the path normalisation so that double-slash sequences are collapsed before tree insertion.",
+    "hint_levels": {
+      "symptom_only": "A route registered under a RouterGroup whose base path ends with a slash (e.g., \"/api/\") becomes unreachable at runtime. Requests to the expected URL return 404. No error or warning is produced during route registration.",
+      "file_hint": "The bug is in utils.go in the joinPaths() helper (called from RouterGroup.calculateAbsolutePath) and in routergroup.go where Group() constructs the child base path. When the parent base path ends with '/' and the relative path starts with '/', joinPaths concatenates them without deduplication, producing a double-slash that is written into the radix tree in tree.go.",
+      "function_hint": "In utils.go, joinPaths() at line 41 simply concatenates absolutePath and relativePath. If absolutePath is \"/api/\" and relativePath is \"/users\", the result is \"/api//users\". In routergroup.go, Group() at line 72 calls calculateAbsolutePath() which calls joinPaths() with no normalisation step. In tree.go, addRoute() stores the path verbatim. The fix is to add a path.Clean() or manual deduplication step in joinPaths() (or calculateAbsolutePath) to collapse consecutive slashes."
+    },
+    "reasoning_forcing_score": 7,
+    "context_pressure": "medium",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 7,
+      "context_depth": "cross_file",
+      "domain_knowledge": "framework_specific",
+      "overall": 3
+    },
+    "expected_changes": {
+      "files_modified": [
+        "utils.go"
+      ],
+      "files_must_read": [
+        "utils.go",
+        "routergroup.go",
+        "tree.go",
+        "gin.go"
+      ],
+      "key_assertions": [
+        "path\\.Clean|strings\\.Replace.*//|cleanPath|joinPaths"
+      ],
+      "negative_assertions": [
+        "remove.*Group|delete.*joinPaths"
+      ],
+      "assertion_type": "diff_contains"
+    },
+    "reasoning_chain": [
+      "Read symptom: route registered under a group with trailing-slash base path returns 404 at runtime",
+      "Open routergroup.go and find Group() — it calls calculateAbsolutePath() to build the child base path",
+      "Find calculateAbsolutePath() — it calls joinPaths(g.basePath, relativePath)",
+      "Open utils.go and inspect joinPaths() — it blindly concatenates without deduplication",
+      "Construct example: joinPaths(\"/api/\", \"/users\") → \"/api//users\"",
+      "Open tree.go and find addRoute() — path is stored verbatim, no normalisation",
+      "Open gin.go ServeHTTP to confirm trie lookup is exact-match — \"/api/users\" ≠ \"/api//users\"",
+      "Apply fix: add path normalisation (e.g., path.Clean or regex replace) in joinPaths() or calculateAbsolutePath()"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-28",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    },
+    "test_oracle": {
+      "test_command": "go test ./... -run TestRouterGroupBasePath -v",
+      "fail_to_pass": [
+        "TestRouterGroupDoubleSlashNormalization",
+        "TestGroupTrailingSlashChildRoute"
+      ],
+      "pass_to_pass": [
+        "TestRouterGroup",
+        "TestRouterGroupBasePath"
+      ],
+      "weak_test_ids": [
+        "TestRouterGroup"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 300000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}

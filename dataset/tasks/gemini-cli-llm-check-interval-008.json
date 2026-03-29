@@ -75,6 +75,8 @@
     "timeout_ms": 300000,
     "policy": "USUALLY_PASSES",
     "setup": "sparse_clone",
+    "test_oracle": null,
+    "semantic_correctness": "manual_review_required",
     "cleanup": "delete_workspace"
   }
 }
