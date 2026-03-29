@@ -1,0 +1,22 @@
+{
+  "repo_id": "kubernetes-kubernetes",
+  "url": "https://github.com/kubernetes/kubernetes",
+  "commit": "a8a1abc25cad87333840cd7d54be2efaf31a3177",
+  "languages": ["Go"],
+  "size_files": 32000,
+  "size_lines": 2800000,
+  "license": "Apache-2.0",
+  "description": "Kubernetes — production-grade container orchestration, the de facto standard for deploying distributed systems at scale",
+  "stars": 113000,
+  "sparse_checkout_paths": [
+    "staging/src/k8s.io/client-go/tools/cache/",
+    "pkg/kubelet/",
+    "pkg/scheduler/framework/plugins/",
+    "pkg/proxy/"
+  ],
+  "task_ids": [
+    "kubernetes-informer-resync-duplicate-events-001",
+    "kubernetes-kubelet-oom-score-drift-002"
+  ],
+  "verified_at": "2026-03-30"
+}

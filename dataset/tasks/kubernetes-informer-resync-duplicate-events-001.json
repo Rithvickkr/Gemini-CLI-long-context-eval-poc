@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "kubernetes-informer-resync-duplicate-events-001",
+  "repository": {
+    "url": "https://github.com/kubernetes/kubernetes",
+    "commit": "a8a1abc25cad87333840cd7d54be2efaf31a3177",
+    "languages": ["Go"],
+    "size_files": 32000,
+    "size_lines": 2800000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "staging/src/k8s.io/client-go/tools/cache/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "race_condition",
+    "prompt": "A Kubernetes controller using a shared informer with a resync period is processing duplicate Update events for objects that have not actually changed. Under normal operation each object triggers exactly one Update event per real change. But after the informer completes a re-list (triggered by a watch expiry), some objects receive both a synthetic resync Update from the pending resync queue AND an Update from the re-list Replace path. The controller's reconcile loop runs twice for the same object version, which is idempotent in most cases but causes a thundering-herd problem under load and breaks controllers that use generation-based change detection. Investigate how the DeltaFIFO queue handles the interaction between a Replace call (from re-list) and a pending resync delta for the same key, and fix the deduplication logic.",
+    "hint_levels": {
+      "symptom_only": "A controller's reconcile function is called twice for the same object version with no intervening change. This happens only after the informer reconnects following a watch timeout. Generation-based controllers that skip reconciliation when generation is unchanged miss real updates because their internal 'already processed this generation' cache was populated by the duplicate synthetic event.",
+      "file_hint": "The bug is in staging/src/k8s.io/client-go/tools/cache/delta_fifo.go in the Replace() method. When Replace() is called during a re-list, it calls syncKeyLocked() for every key in the store. If a key already has a pending Sync delta in the queue (from the resync goroutine in shared_informer.go), Replace() does not deduplicate it — it appends a second Replaced delta. The consumer in shared_informer.go handleDeltas() processes both, emitting two consecutive Update events to handlers.",
+      "function_hint": "In delta_fifo.go Replace() at around line 420, after f.syncKeyLocked(k) adds a Sync delta, the existing check isDeletionKey() only guards against deleted objects. In shared_informer.go resyncChan() (around line 530) the resync goroutine calls f.Resync() which calls syncKeyLocked() independently. The race: resync goroutine calls syncKeyLocked(key) → adds Sync delta. Then Replace() is called → calls syncKeyLocked(key) again → adds a second Sync/Replaced delta for same key. Fix: in Replace(), check whether a Sync or Replaced delta already exists for the key before appending a new one."
+    },
+    "reasoning_forcing_score": 9,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 4,
+      "languages_required": 1,
+      "reasoning_steps": 9,
+      "context_depth": "cross_package",
+      "domain_knowledge": "architecture_level",
+      "overall": 5
+    },
+    "expected_changes": {
+      "files_modified": [
+        "staging/src/k8s.io/client-go/tools/cache/delta_fifo.go"
+      ],
+      "files_must_read": [
+        "staging/src/k8s.io/client-go/tools/cache/delta_fifo.go",
+        "staging/src/k8s.io/client-go/tools/cache/shared_informer.go",
+        "staging/src/k8s.io/client-go/tools/cache/store.go",
+        "staging/src/k8s.io/client-go/tools/cache/reflector.go"
+      ],
+      "key_assertions": [
+        "dedupDeltas|hasSyncDelta|Sync.*already|Replaced.*skip|existingDeltas"
+      ],
+      "negative_assertions": [
+        "remove.*Resync|disable.*resync|delete.*syncKeyLocked"
+      ],
+      "assertion_type": "both"
+    },
+    "reasoning_chain": [
+      "Read symptom: controller reconcile fires twice for same object version after watch reconnect",
+      "Open shared_informer.go and find the resync goroutine — it calls DeltaFIFO.Resync() on a timer",
+      "Open delta_fifo.go and find Resync() — it calls syncKeyLocked() for every key in the known objects set",
+      "Find Replace() in delta_fifo.go — called by the reflector during re-list; it also calls syncKeyLocked() for every key",
+      "Open reflector.go and find ListAndWatch() — confirm it calls store.Replace() when a watch expires and a re-list happens",
+      "Trace the race: resync timer fires, syncKeyLocked(key) adds Sync delta → then re-list fires Replace(), which calls syncKeyLocked(key) again → second delta added",
+      "Open store.go to understand the ThreadSafeStore key iteration used by both paths",
+      "Confirm both deltas arrive at handleDeltas() in shared_informer.go and both emit UpdateFunc to registered handlers",
+      "Fix: in Replace(), before calling syncKeyLocked(k), check if the key already has a pending Sync or Replaced delta in the queue and skip if so"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-29",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    },
+    "gold_patch": "--- a/staging/src/k8s.io/client-go/tools/cache/delta_fifo.go\n+++ b/staging/src/k8s.io/client-go/tools/cache/delta_fifo.go\n@@ -418,6 +418,12 @@ func (f *DeltaFIFO) Replace(list []interface{}, resourceVersion string) error {\n \t\tfor k := range f.items {\n \t\t\tif _, exists := keys[k]; !exists {\n \t\t\t\tif err := f.deleteDeltaLocked(k, DeletedFinalStateUnknown{...}); err != nil { ... }\n \t\t\t}\n \t\t}\n+\t\t// Skip syncKeyLocked for keys that already have a pending Sync/Replaced delta\n+\t\t// to avoid emitting duplicate Update events when resync and re-list race.\n \t\tfor k := range keys {\n+\t\t\tif f.hasPendingSyncDelta(k) {\n+\t\t\t\tcontinue\n+\t\t\t}\n \t\t\tif err := f.syncKeyLocked(k); err != nil { ... }\n \t\t}\n }\n+\n+func (f *DeltaFIFO) hasPendingSyncDelta(key string) bool {\n+\tdeltas := f.items[key]\n+\tfor _, d := range deltas {\n+\t\tif d.Type == Sync || d.Type == Replaced {\n+\t\t\treturn true\n+\t\t}\n+\t}\n+\treturn false\n+}",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 52000,
+      "total_context_tokens": 180000,
+      "pressure_pct": 18.0
+    },
+    "test_oracle": {
+      "test_command": "go test k8s.io/client-go/tools/cache -run TestDeltaFIFO -v -count=1 -race",
+      "fail_to_pass": [
+        "TestDeltaFIFO_ResyncReplaceDeduplication",
+        "TestDeltaFIFO_NoDuplicateSyncOnRelist"
+      ],
+      "pass_to_pass": [
+        "TestDeltaFIFO_basic",
+        "TestDeltaFIFO_replaceExistingKeysWithoutDeletions",
+        "TestDeltaFIFO_Resync"
+      ],
+      "weak_test_ids": [
+        "TestDeltaFIFO_Resync"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 480000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "kubernetes-kubelet-oom-score-drift-002",
+  "repository": {
+    "url": "https://github.com/kubernetes/kubernetes",
+    "commit": "a8a1abc25cad87333840cd7d54be2efaf31a3177",
+    "languages": ["Go"],
+    "size_files": 32000,
+    "size_lines": 2800000,
+    "license": "Apache-2.0",
+    "sparse_checkout_paths": [
+      "pkg/kubelet/"
+    ]
+  },
+  "task": {
+    "type": "bug_fix",
+    "category": "silent_failure",
+    "prompt": "The Kubernetes kubelet assigns OOM score adjustments to containers based on their Quality of Service (QoS) class: Guaranteed containers get -998, Burstable containers get a score proportional to their memory request, and BestEffort containers get 1000. When a pod's resources are updated in-place via the resize API (added in Kubernetes 1.27), the container's QoS class can change — for example, a Burstable container that is given equal requests and limits becomes Guaranteed. The kubelet applies the resource update to the container runtime but does not re-apply the OOM score adjustment. The container continues running with the old OOM score, meaning a now-Guaranteed container can still be OOM-killed before BestEffort containers, silently violating the QoS guarantee. Investigate the in-place pod resize path and find where OOM score adjustment should be re-applied after a resource update.",
+    "hint_levels": {
+      "symptom_only": "After an in-place pod resize that changes a container's effective QoS class (e.g., Burstable → Guaranteed), the container is unexpectedly OOM-killed before BestEffort containers on the same node. The container's /proc/<pid>/oom_score_adj still reflects the pre-resize QoS class.",
+      "file_hint": "The bug is in pkg/kubelet/kubelet_pods.go in the handlePodResourcesResize() function (or equivalent). It calls the container runtime to update resource limits but does not call pkg/kubelet/oom/oom_watcher.go or the OOM score application logic in pkg/kubelet/cm/container_manager_linux.go. The QoS class recalculation in pkg/api/v1/helper/qos/qos.go correctly produces the new class, but the result is not propagated to the OOM scorer.",
+      "function_hint": "In pkg/kubelet/kubelet_pods.go, the resize handler calls containerRuntime.UpdateContainerResources() to apply the new CPU/memory limits. In pkg/kubelet/cm/container_manager_linux.go, applyOOMScoreAdj() reads the QoS class from the pod spec and writes to /proc/<pid>/oom_score_adj. The fix: after UpdateContainerResources() succeeds, recompute the pod's QoS class using qos.GetPodQOS() and call applyOOMScoreAdj() with the updated class."
+    },
+    "reasoning_forcing_score": 8,
+    "context_pressure": "high",
+    "difficulty": {
+      "files_involved": 5,
+      "languages_required": 1,
+      "reasoning_steps": 8,
+      "context_depth": "cross_package",
+      "domain_knowledge": "architecture_level",
+      "overall": 5
+    },
+    "expected_changes": {
+      "files_modified": [
+        "pkg/kubelet/kubelet_pods.go"
+      ],
+      "files_must_read": [
+        "pkg/kubelet/kubelet_pods.go",
+        "pkg/kubelet/cm/container_manager_linux.go",
+        "pkg/kubelet/oom/oom_watcher.go",
+        "pkg/api/v1/helper/qos/qos.go",
+        "pkg/kubelet/container/runtime.go"
+      ],
+      "key_assertions": [
+        "applyOOMScoreAdj|GetPodQOS|oom_score_adj|OOMScoreAdj"
+      ],
+      "negative_assertions": [
+        "remove.*OOM|disable.*oom|skip.*qos"
+      ],
+      "assertion_type": "both"
+    },
+    "reasoning_chain": [
+      "Read symptom: container OOM-killed at wrong priority after in-place resize changes its QoS class",
+      "Open kubelet_pods.go and find the in-place resize handler path",
+      "Trace: UpdateContainerResources() is called on the runtime — this updates cgroup limits but not /proc/oom_score_adj",
+      "Open container_manager_linux.go and find applyOOMScoreAdj() — it reads QoS from pod spec and writes to /proc/<pid>/oom_score_adj",
+      "Open qos/qos.go and find GetPodQOS() — confirm it derives class from requests/limits equality",
+      "Confirm applyOOMScoreAdj() is called during pod admission and container start, but NOT in the resize path",
+      "Open oom_watcher.go to understand the OOM event reporting path — separate from score assignment",
+      "Open container/runtime.go to understand UpdateContainerResources() contract — it only updates cgroup values",
+      "Apply fix: after successful UpdateContainerResources(), recompute QoS class and call applyOOMScoreAdj() with updated class"
+    ],
+    "contamination_info": {
+      "issue_created": "2026-03-29",
+      "fix_merged": null,
+      "training_cutoff_risk": "low",
+      "contamination_score": 0.05,
+      "obfuscation_applied": false
+    },
+    "gold_patch": "--- a/pkg/kubelet/kubelet_pods.go\n+++ b/pkg/kubelet/kubelet_pods.go\n@@ -1842,6 +1842,14 @@ func (kl *Kubelet) handlePodResourcesResize(pod *v1.Pod) {\n \t\tif err := kl.containerRuntime.UpdateContainerResources(ctx, containerID, resources); err != nil {\n \t\t\tklog.ErrorS(err, \"Failed to update container resources\", \"pod\", klog.KObj(pod))\n \t\t\tcontinue\n \t\t}\n+\t\t// Re-apply OOM score adjustment because the resize may have changed the\n+\t\t// pod's effective QoS class (e.g., Burstable → Guaranteed).\n+\t\tnewQOS := v1qos.GetPodQOS(pod)\n+\t\tif err := kl.containerManager.ApplyOOMScoreAdjContainer(pod, &container, newQOS); err != nil {\n+\t\t\tklog.ErrorS(err, \"Failed to re-apply OOM score after resize\",\n+\t\t\t\t\"pod\", klog.KObj(pod), \"container\", container.Name)\n+\t\t}\n \t}\n }",
+    "token_budget_estimate": {
+      "files_must_read_tokens": 61000,
+      "total_context_tokens": 220000,
+      "pressure_pct": 22.0
+    },
+    "test_oracle": {
+      "test_command": "go test k8s.io/kubernetes/pkg/kubelet -run TestOOMScore -v -count=1",
+      "fail_to_pass": [
+        "TestOOMScoreAdjAfterInPlaceResize",
+        "TestQoSClassChangeUpdatesOOMScore"
+      ],
+      "pass_to_pass": [
+        "TestOOMScoreAdj",
+        "TestGetPodQOS"
+      ],
+      "weak_test_ids": [
+        "TestOOMScoreAdj"
+      ],
+      "semantic_correctness": "test_necessary_not_sufficient"
+    }
+  },
+  "eval_config": {
+    "timeout_ms": 540000,
+    "policy": "USUALLY_PASSES",
+    "setup": "sparse_clone",
+    "semantic_correctness": "test_necessary_not_sufficient",
+    "cleanup": "delete_workspace"
+  }
+}
